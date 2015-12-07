@@ -183,6 +183,8 @@ public class LocalVPNService extends VpnService
                 boolean dataReceived;
                 while (!Thread.interrupted())
                 {
+                    //Log.i(TAG, "dataSent = " + dataSent);
+
                     if (dataSent)
                         bufferToNetwork = ByteBufferPool.acquire();
                     else
@@ -197,15 +199,17 @@ public class LocalVPNService extends VpnService
                         Packet packet = new Packet(bufferToNetwork);
                         if (packet.isUDP())
                         {
+                            Log.i(TAG, "deviceToNetworkUDPQueue readBytes = " + readBytes);
                             deviceToNetworkUDPQueue.offer(packet);
                         }
                         else if (packet.isTCP())
                         {
+                            Log.i(TAG, "deviceToNetworkTCPQueue readBytes = " + readBytes);
                             deviceToNetworkTCPQueue.offer(packet);
                         }
                         else
                         {
-                            Log.w(TAG, "Unknown packet type");
+                            Log.w(TAG, "Unknown packet type readBytes = " + readBytes);
                             Log.w(TAG, packet.ip4Header.toString());
                             dataSent = false;
                         }
@@ -219,8 +223,10 @@ public class LocalVPNService extends VpnService
                     if (bufferFromNetwork != null)
                     {
                         bufferFromNetwork.flip();
-                        while (bufferFromNetwork.hasRemaining())
+                        while (bufferFromNetwork.hasRemaining()) {
+                            //Log.i(TAG, "vpnOutput");
                             vpnOutput.write(bufferFromNetwork);
+                        }
                         dataReceived = true;
 
                         ByteBufferPool.release(bufferFromNetwork);

@@ -56,14 +56,18 @@ public class TCPOutput implements Runnable
         Log.i(TAG, "Started");
         try
         {
-
             Thread currentThread = Thread.currentThread();
             while (true)
             {
                 Packet currentPacket;
+
+                //Log.i(TAG, "loop1");
+
                 // TODO: Block when not connected
                 do
                 {
+                    //Log.i(TAG, "loop2 poll");
+
                     currentPacket = inputQueue.poll();
                     if (currentPacket != null)
                         break;
@@ -85,19 +89,33 @@ public class TCPOutput implements Runnable
 
                 String ipAndPort = destinationAddress.getHostAddress() + ":" +
                         destinationPort + ":" + sourcePort;
+                //Log.i(TAG, "ipAndPort = " + ipAndPort);
+
                 TCB tcb = TCB.getTCB(ipAndPort);
-                if (tcb == null)
+                if (tcb == null) {
+                    Log.i(TAG, "initializeConnection");
                     initializeConnection(ipAndPort, destinationAddress, destinationPort,
                             currentPacket, tcpHeader, responseBuffer);
-                else if (tcpHeader.isSYN())
+                }
+                else if (tcpHeader.isSYN()) {
+                    Log.i(TAG, "tcpHeader isSYN");
                     processDuplicateSYN(tcb, tcpHeader, responseBuffer);
-                else if (tcpHeader.isRST())
+                }
+                else if (tcpHeader.isRST()) {
+                    Log.i(TAG, "tcpHeader isRST");
                     closeCleanly(tcb, responseBuffer);
-                else if (tcpHeader.isFIN())
+                }
+                else if (tcpHeader.isFIN()) {
+                    Log.i(TAG, "tcpHeader isFIN");
                     processFIN(tcb, tcpHeader, responseBuffer);
-                else if (tcpHeader.isACK())
+                }
+                else if (tcpHeader.isACK()) {
+                    Log.i(TAG, "tcpHeader isACK");
                     processACK(tcb, tcpHeader, payloadBuffer, responseBuffer);
-
+                }
+                else{
+                    Log.w(TAG, "unknow tcpHeader type!!!");
+                }
                 // XXX: cleanup later
                 if (responseBuffer.position() == 0)
                     ByteBufferPool.release(responseBuffer);
@@ -122,6 +140,7 @@ public class TCPOutput implements Runnable
                                       Packet currentPacket, TCPHeader tcpHeader, ByteBuffer responseBuffer)
             throws IOException
     {
+        //Log.i(TAG, "initializeConnection");
         currentPacket.swapSourceAndDestination();
         if (tcpHeader.isSYN())
         {
@@ -149,6 +168,7 @@ public class TCPOutput implements Runnable
                     tcb.status = TCBStatus.SYN_SENT;
                     selector.wakeup();
                     tcb.selectionKey = outputChannel.register(selector, SelectionKey.OP_CONNECT, tcb);
+                    Log.i(TAG, "tcb.status = TCBStatus.SYN_SENT");
                     return;
                 }
             }
@@ -164,11 +184,15 @@ public class TCPOutput implements Runnable
             currentPacket.updateTCPBuffer(responseBuffer, (byte) TCPHeader.RST,
                     0, tcpHeader.sequenceNumber + 1, 0);
         }
+
+        Log.i(TAG, "initializeConnection networkToDeviceQueue TCP readBytes = " + responseBuffer.position());
+
         outputQueue.offer(responseBuffer);
     }
 
     private void processDuplicateSYN(TCB tcb, TCPHeader tcpHeader, ByteBuffer responseBuffer)
     {
+        //Log.i(TAG, "processDuplicateSYN");
         synchronized (tcb)
         {
             if (tcb.status == TCBStatus.SYN_SENT)
@@ -182,6 +206,7 @@ public class TCPOutput implements Runnable
 
     private void processFIN(TCB tcb, TCPHeader tcpHeader, ByteBuffer responseBuffer)
     {
+        //Log.i(TAG, "processFIN");
         synchronized (tcb)
         {
             Packet referencePacket = tcb.referencePacket;
@@ -202,16 +227,24 @@ public class TCPOutput implements Runnable
                 tcb.mySequenceNum++; // FIN counts as a byte
             }
         }
+
+        Log.i(TAG, "processFIN networkToDeviceQueue TCP readBytes = " + responseBuffer.position());
+
         outputQueue.offer(responseBuffer);
     }
 
     private void processACK(TCB tcb, TCPHeader tcpHeader, ByteBuffer payloadBuffer, ByteBuffer responseBuffer) throws IOException
     {
+        //Log.i(TAG, "processACK");
+
         int payloadSize = payloadBuffer.limit() - payloadBuffer.position();
 
         synchronized (tcb)
         {
             SocketChannel outputChannel = tcb.channel;
+
+            Log.i(TAG, "processACK tcb.status = " + tcb.status);
+
             if (tcb.status == TCBStatus.SYN_RECEIVED)
             {
                 tcb.status = TCBStatus.ESTABLISHED;
@@ -254,18 +287,25 @@ public class TCPOutput implements Runnable
             Packet referencePacket = tcb.referencePacket;
             referencePacket.updateTCPBuffer(responseBuffer, (byte) TCPHeader.ACK, tcb.mySequenceNum, tcb.myAcknowledgementNum, 0);
         }
+
+        Log.i(TAG, "processACK networkToDeviceQueue TCP readBytes = " + responseBuffer.position());
+
         outputQueue.offer(responseBuffer);
     }
 
     private void sendRST(TCB tcb, int prevPayloadSize, ByteBuffer buffer)
     {
         tcb.referencePacket.updateTCPBuffer(buffer, (byte) TCPHeader.RST, 0, tcb.myAcknowledgementNum + prevPayloadSize, 0);
+
+        Log.i(TAG, "sendRST networkToDeviceQueue TCP readBytes = " + buffer.position());
+
         outputQueue.offer(buffer);
         TCB.closeTCB(tcb);
     }
 
     private void closeCleanly(TCB tcb, ByteBuffer buffer)
     {
+        //Log.i(TAG, "closeCleanly");
         ByteBufferPool.release(buffer);
         TCB.closeTCB(tcb);
     }

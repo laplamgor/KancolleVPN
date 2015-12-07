@@ -55,6 +55,7 @@ public class UDPInput implements Runnable
                     Thread.sleep(10);
                     continue;
                 }
+                Log.i(TAG, "readyChannels = " + readyChannels);
 
                 Set<SelectionKey> keys = selector.selectedKeys();
                 Iterator<SelectionKey> keyIterator = keys.iterator();
@@ -79,6 +80,7 @@ public class UDPInput implements Runnable
                         referencePacket.updateUDPBuffer(receiveBuffer, readBytes);
                         receiveBuffer.position(HEADER_SIZE + readBytes);
 
+                        Log.i(TAG, "networkToDeviceQueue UDP readBytes = " + readBytes);
                         outputQueue.offer(receiveBuffer);
                     }
                 }
