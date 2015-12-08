@@ -16,7 +16,7 @@
 
 package xyz.hexene.localvpn;
 
-import android.util.Log;
+import com.socks.library.KLog;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -44,7 +44,7 @@ public class UDPOutput implements Runnable
                 @Override
                 public void cleanup(Map.Entry<String, DatagramChannel> eldest)
                 {
-                    Log.i(TAG, "channelCache cleanup ipAndPort = " + eldest.getKey());
+                    KLog.i(TAG, "channelCache cleanup ipAndPort = " + eldest.getKey());
                     closeChannel(eldest.getValue());
                 }
             });
@@ -59,10 +59,9 @@ public class UDPOutput implements Runnable
     @Override
     public void run()
     {
-        Log.i(TAG, "Started");
+        KLog.i(TAG, "Started");
         try
         {
-
             Thread currentThread = Thread.currentThread();
             while (true)
             {
@@ -76,15 +75,17 @@ public class UDPOutput implements Runnable
                     Thread.sleep(10);
                 } while (!currentThread.isInterrupted());
 
-                if (currentThread.isInterrupted())
+                if (currentThread.isInterrupted()) {
+                    KLog.w(TAG, "currentThread.isInterrupted !!!");
                     break;
+                }
 
                 InetAddress destinationAddress = currentPacket.ip4Header.destinationAddress;
                 int destinationPort = currentPacket.udpHeader.destinationPort;
                 int sourcePort = currentPacket.udpHeader.sourcePort;
 
                 String ipAndPort = destinationAddress.getHostAddress() + ":" + destinationPort + ":" + sourcePort;
-                Log.i(TAG, "ipAndPort = " + ipAndPort);
+                //KLog.i(TAG, "ipAndPort = " + ipAndPort);
 
                 DatagramChannel outputChannel = channelCache.get(ipAndPort);
                 if (outputChannel == null) {
@@ -92,11 +93,10 @@ public class UDPOutput implements Runnable
                     try
                     {
                         outputChannel.connect(new InetSocketAddress(destinationAddress, destinationPort));
-
                     }
                     catch (IOException e)
                     {
-                        Log.e(TAG, "Connection error: " + ipAndPort, e);
+                        KLog.e(TAG, "Connection error: " + ipAndPort + e.toString());
                         closeChannel(outputChannel);
                         ByteBufferPool.release(currentPacket.backingBuffer);
                         continue;
@@ -104,16 +104,16 @@ public class UDPOutput implements Runnable
                     outputChannel.configureBlocking(false);
                     currentPacket.swapSourceAndDestination();
 
-                    selector.wakeup();
+                    //selector.wakeup();
                     outputChannel.register(selector, SelectionKey.OP_READ, currentPacket);
 
                     vpnService.protect(outputChannel.socket());
 
                     channelCache.put(ipAndPort, outputChannel);
-                    Log.i(TAG, "ipAndPort = " + ipAndPort + ";channelCache put");
+                    KLog.i(TAG, "channelCache put ipAndPort = " + ipAndPort);
                 }
                 else {
-                    Log.i(TAG, "reuse ipAndPort = " + ipAndPort);
+                    KLog.i(TAG, "channelCache get ipAndPort = " + ipAndPort);
                 }
 
                 try
@@ -124,31 +124,32 @@ public class UDPOutput implements Runnable
                 }
                 catch (IOException e)
                 {
-                    Log.e(TAG, "Network write error: " + ipAndPort, e);
-                    Log.i(TAG, "channelCache remove ipAndPort = " + ipAndPort);
-                    channelCache.remove(ipAndPort);
+                    KLog.e(TAG, "Network write error: " + ipAndPort + e.toString());
+                    KLog.i(TAG, "channelCache remove ipAndPort = " + ipAndPort);
                     closeChannel(outputChannel);
+                    channelCache.remove(ipAndPort);
                 }
                 ByteBufferPool.release(currentPacket.backingBuffer);
             }
         }
         catch (InterruptedException e)
         {
-            Log.i(TAG, "Stopping");
+            KLog.i(TAG, "Stopping");
         }
         catch (IOException e)
         {
-            Log.e(TAG, e.toString(), e);
+            KLog.e(TAG, e.toString());
         }
         finally
         {
             closeAll();
         }
+        KLog.i("stopped run");
     }
 
     private void closeAll()
     {
-        Log.i(TAG, "closeAll");
+        KLog.i(TAG, "closeAll");
         Iterator<Map.Entry<String, DatagramChannel>> it = channelCache.entrySet().iterator();
         while (it.hasNext())
         {
@@ -159,7 +160,7 @@ public class UDPOutput implements Runnable
 
     private void closeChannel(DatagramChannel channel)
     {
-        Log.i(TAG, "closeChannel");
+        KLog.i(TAG, "closeChannel");
         try
         {
             channel.close();

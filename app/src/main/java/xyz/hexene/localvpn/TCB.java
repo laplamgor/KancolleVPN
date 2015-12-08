@@ -16,7 +16,7 @@
 
 package xyz.hexene.localvpn;
 
-import android.util.Log;
+import com.socks.library.KLog;
 
 import java.io.IOException;
 import java.nio.channels.SelectionKey;
@@ -51,8 +51,6 @@ public class TCB
     public boolean waitingForNetworkData;
     public SelectionKey selectionKey;
 
-    private static final String TAG = TCB.class.getSimpleName();
-
     private static final int MAX_CACHE_SIZE = 500; // XXX: Is this ideal?
     private static LRUCache<String, TCB> tcbCache =
             new LRUCache<>(MAX_CACHE_SIZE, new LRUCache.CleanupCallback<String, TCB>()
@@ -60,7 +58,7 @@ public class TCB
                 @Override
                 public void cleanup(Map.Entry<String, TCB> eldest)
                 {
-                    Log.i(TAG, "cleanup = " + eldest.getKey());
+                    KLog.i("cleanup = " + eldest.getKey());
                     eldest.getValue().closeChannel();
                 }
             });
@@ -69,7 +67,7 @@ public class TCB
     {
         synchronized (tcbCache)
         {
-            Log.i(TAG, "getTCB key = " + ipAndPort);
+            KLog.i("key = " + ipAndPort);
             return tcbCache.get(ipAndPort);
         }
     }
@@ -78,7 +76,7 @@ public class TCB
     {
         synchronized (tcbCache)
         {
-            Log.i(TAG, "putTCB key = " + ipAndPort);
+            KLog.i("key = " + ipAndPort);
             tcbCache.put(ipAndPort, tcb);
         }
     }
@@ -99,7 +97,7 @@ public class TCB
 
     public static void closeTCB(TCB tcb)
     {
-        Log.i(TAG, "closeTCB key = " + tcb.ipAndPort);
+        KLog.i("key = " + tcb.ipAndPort);
         tcb.closeChannel();
         synchronized (tcbCache)
         {
@@ -109,7 +107,7 @@ public class TCB
 
     public static void closeAll()
     {
-        Log.i(TAG, "closeAll");
+        KLog.i("closeAll");
         synchronized (tcbCache)
         {
             Iterator<Map.Entry<String, TCB>> it = tcbCache.entrySet().iterator();

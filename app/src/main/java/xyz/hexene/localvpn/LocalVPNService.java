@@ -23,6 +23,8 @@ import android.os.ParcelFileDescriptor;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
 
+import com.socks.library.KLog;
+
 import java.io.Closeable;
 import java.io.FileDescriptor;
 import java.io.FileInputStream;
@@ -171,7 +173,7 @@ public class LocalVPNService extends VpnService
         @Override
         public void run()
         {
-            Log.i(TAG, "Started");
+            KLog.i(TAG, "Started");
 
             FileChannel vpnInput = new FileInputStream(vpnFileDescriptor).getChannel();
             FileChannel vpnOutput = new FileOutputStream(vpnFileDescriptor).getChannel();
@@ -183,7 +185,7 @@ public class LocalVPNService extends VpnService
                 boolean dataReceived;
                 while (!Thread.interrupted())
                 {
-                    //Log.i(TAG, "dataSent = " + dataSent);
+                    //KLog.i(TAG, "dataSent = " + dataSent);
 
                     if (dataSent)
                         bufferToNetwork = ByteBufferPool.acquire();
@@ -199,18 +201,18 @@ public class LocalVPNService extends VpnService
                         Packet packet = new Packet(bufferToNetwork);
                         if (packet.isUDP())
                         {
-                            Log.i(TAG, "deviceToNetworkUDPQueue readBytes = " + readBytes);
+                            KLog.i(TAG, "deviceToNetworkUDPQueue readBytes = " + readBytes);
                             deviceToNetworkUDPQueue.offer(packet);
                         }
                         else if (packet.isTCP())
                         {
-                            Log.i(TAG, "deviceToNetworkTCPQueue readBytes = " + readBytes);
+                            KLog.i(TAG, "deviceToNetworkTCPQueue readBytes = " + readBytes);
                             deviceToNetworkTCPQueue.offer(packet);
                         }
                         else
                         {
-                            Log.w(TAG, "Unknown packet type readBytes = " + readBytes);
-                            Log.w(TAG, packet.ip4Header.toString());
+                            KLog.w(TAG, "Unknown packet type readBytes = " + readBytes);
+                            KLog.w(TAG, packet.ip4Header.toString());
                             dataSent = false;
                         }
                     }
@@ -224,7 +226,7 @@ public class LocalVPNService extends VpnService
                     {
                         bufferFromNetwork.flip();
                         while (bufferFromNetwork.hasRemaining()) {
-                            //Log.i(TAG, "vpnOutput");
+                            //KLog.i(TAG, "vpnOutput");
                             vpnOutput.write(bufferFromNetwork);
                         }
                         dataReceived = true;
@@ -244,16 +246,18 @@ public class LocalVPNService extends VpnService
             }
             catch (InterruptedException e)
             {
-                Log.i(TAG, "Stopping");
+                KLog.i(TAG, "Stopping");
             }
             catch (IOException e)
             {
-                Log.w(TAG, e.toString(), e);
+                KLog.e(TAG, e.toString());
             }
             finally
             {
                 closeResources(vpnInput, vpnOutput);
             }
+
+            KLog.i("stopped run");
         }
     }
 }

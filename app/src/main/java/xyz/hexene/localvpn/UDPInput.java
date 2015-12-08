@@ -16,7 +16,7 @@
 
 package xyz.hexene.localvpn;
 
-import android.util.Log;
+import com.socks.library.KLog;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -46,16 +46,15 @@ public class UDPInput implements Runnable
     {
         try
         {
-            Log.i(TAG, "Started");
+            KLog.i(TAG, "Started");
             while (!Thread.interrupted())
             {
-                int readyChannels = selector.select();
-
+                int readyChannels = selector.select(10);
                 if (readyChannels == 0) {
-                    Thread.sleep(10);
+                    Thread.sleep(1);
                     continue;
                 }
-                Log.i(TAG, "readyChannels = " + readyChannels);
+                //KLog.i(TAG, "readyChannels = " + readyChannels);
 
                 Set<SelectionKey> keys = selector.selectedKeys();
                 Iterator<SelectionKey> keyIterator = keys.iterator();
@@ -72,15 +71,20 @@ public class UDPInput implements Runnable
                         receiveBuffer.position(HEADER_SIZE);
 
                         DatagramChannel inputChannel = (DatagramChannel) key.channel();
-                        // XXX: We should handle any IOExceptions here immediately,
-                        // but that probably won't happen with UDP
-                        int readBytes = inputChannel.read(receiveBuffer);
+                        int readBytes = 0;
+                        try {
+                            readBytes = inputChannel.read(receiveBuffer);
+                        }
+                        catch (IOException e){
+                            KLog.e(TAG, "Network read error: " + e.toString());
+                            continue;
+                        }
 
                         Packet referencePacket = (Packet) key.attachment();
                         referencePacket.updateUDPBuffer(receiveBuffer, readBytes);
                         receiveBuffer.position(HEADER_SIZE + readBytes);
 
-                        Log.i(TAG, "networkToDeviceQueue UDP readBytes = " + readBytes);
+                        KLog.i(TAG, "networkToDeviceQueue UDP readBytes = " + readBytes);
                         outputQueue.offer(receiveBuffer);
                     }
                 }
@@ -88,11 +92,13 @@ public class UDPInput implements Runnable
         }
         catch (InterruptedException e)
         {
-            Log.i(TAG, "Stopping");
+            KLog.i(TAG, "Stopping");
         }
         catch (IOException e)
         {
-            Log.w(TAG, e.toString(), e);
+            KLog.w(TAG, e.toString());
         }
+
+        KLog.i("stopped run");
     }
 }

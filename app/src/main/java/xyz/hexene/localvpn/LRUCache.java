@@ -16,14 +16,12 @@
 
 package xyz.hexene.localvpn;
 
-import android.util.Log;
+import com.socks.library.KLog;
 
 import java.util.LinkedHashMap;
 
 public class LRUCache<K, V> extends LinkedHashMap<K, V>
 {
-    private static final String TAG = LRUCache.class.getSimpleName();
-
     private int maxSize;
     private CleanupCallback callback;
 
@@ -40,7 +38,7 @@ public class LRUCache<K, V> extends LinkedHashMap<K, V>
     {
         if (size() > maxSize)
         {
-            Log.i(TAG, "removeEldestEntry = " + eldest.getKey());
+            KLog.i("removeEldestEntry = " + eldest.getKey());
             callback.cleanup(eldest);
             return true;
         }

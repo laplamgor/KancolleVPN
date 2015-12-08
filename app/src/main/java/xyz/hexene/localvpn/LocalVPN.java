@@ -27,6 +27,8 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
 
+import com.socks.library.KLog;
+
 
 public class LocalVPN extends ActionBarActivity
 {
@@ -51,6 +53,8 @@ public class LocalVPN extends ActionBarActivity
     protected void onCreate(Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
+        KLog.init(BuildConfig.LOG_DEBUG);
+
         setContentView(R.layout.activity_local_vpn);
         final Button vpnButton = (Button)findViewById(R.id.vpn);
         vpnButton.setOnClickListener(new View.OnClickListener()
