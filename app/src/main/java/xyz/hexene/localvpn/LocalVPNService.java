@@ -201,12 +201,12 @@ public class LocalVPNService extends VpnService
                         Packet packet = new Packet(bufferToNetwork);
                         if (packet.isUDP())
                         {
-                            KLog.i(TAG, "deviceToNetworkUDPQueue readBytes = " + readBytes);
+                            //KLog.i(TAG, "deviceToNetworkUDPQueue readBytes = " + readBytes);
                             deviceToNetworkUDPQueue.offer(packet);
                         }
                         else if (packet.isTCP())
                         {
-                            KLog.i(TAG, "deviceToNetworkTCPQueue readBytes = " + readBytes);
+                            //KLog.i(TAG, "deviceToNetworkTCPQueue readBytes = " + readBytes);
                             deviceToNetworkTCPQueue.offer(packet);
                         }
                         else

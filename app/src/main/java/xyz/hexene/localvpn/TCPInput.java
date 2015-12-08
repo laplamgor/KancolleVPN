@@ -183,7 +183,7 @@ public class TCPInput implements Runnable
                         tcb.mySequenceNum, tcb.myAcknowledgementNum, readBytes);
                 tcb.mySequenceNum += readBytes; // Next sequence number
                 receiveBuffer.position(HEADER_SIZE + readBytes);
-                KLog.i(TAG, "TCP networkToDeviceQueue PSH|ACK");
+                KLog.i(TAG, "TCP networkToDeviceQueue PSH|ACK readBytes = " + readBytes);
             }
         }
 

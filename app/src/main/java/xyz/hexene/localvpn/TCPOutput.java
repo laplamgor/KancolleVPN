@@ -89,24 +89,24 @@ public class TCPOutput implements Runnable
 
                 TCB tcb = TCB.getTCB(ipAndPort);
                 if (tcb == null) {
-                    KLog.i("ipAndPort = " + ipAndPort + "->init");
+                    //KLog.i("ipAndPort = " + ipAndPort + "->init");
                     initializeConnection(ipAndPort, destinationAddress, destinationPort,
                             currentPacket, tcpHeader, responseBuffer);
                 }
                 else if (tcpHeader.isSYN()) {
-                    KLog.i("ipAndPort = " + ipAndPort + "->SYN");
+                    //KLog.i("ipAndPort = " + ipAndPort + "->SYN");
                     processDuplicateSYN(tcb, tcpHeader, responseBuffer);
                 }
                 else if (tcpHeader.isRST()) {
-                    KLog.i("ipAndPort = " + ipAndPort + "->RST");
+                    //KLog.i("ipAndPort = " + ipAndPort + "->RST");
                     closeCleanly(tcb, responseBuffer);
                 }
                 else if (tcpHeader.isFIN()) {
-                    KLog.i("ipAndPort = " + ipAndPort + "->FIN");
+                   //KLog.i("ipAndPort = " + ipAndPort + "->FIN");
                     processFIN(tcb, tcpHeader, responseBuffer);
                 }
                 else if (tcpHeader.isACK()) {
-                    KLog.i("ipAndPort = " + ipAndPort + "->ACK");
+                    //KLog.i("ipAndPort = " + ipAndPort + "->ACK");
                     processACK(tcb, tcpHeader, payloadBuffer, responseBuffer);
                 }
                 else{
@@ -142,8 +142,8 @@ public class TCPOutput implements Runnable
         if (tcpHeader.isSYN())
         {
             SocketChannel outputChannel = SocketChannel.open();
-            outputChannel.configureBlocking(false);
             vpnService.protect(outputChannel.socket());
+            outputChannel.configureBlocking(false);
 
             TCB tcb = new TCB(ipAndPort, random.nextInt(Short.MAX_VALUE + 1), tcpHeader.sequenceNumber, tcpHeader.sequenceNumber + 1,
                     tcpHeader.acknowledgementNumber, outputChannel, currentPacket);
@@ -152,6 +152,7 @@ public class TCPOutput implements Runnable
             try
             {
                 outputChannel.connect(new InetSocketAddress(destinationAddress, destinationPort));
+                /*
                 if (outputChannel.finishConnect())
                 {
                     tcb.status = TCBStatus.SYN_RECEIVED;
@@ -168,6 +169,7 @@ public class TCPOutput implements Runnable
                     return;
                 }
                 else
+                */
                 {
                     tcb.status = TCBStatus.SYN_SENT;
                     selector.wakeup();
@@ -184,9 +186,7 @@ public class TCPOutput implements Runnable
 
                 TCB.closeTCB(tcb);//maybe change zhangjie 2015.12.8
             }
-        }
-        else
-        {
+        } else {
             currentPacket.updateTCPBuffer(responseBuffer, (byte) TCPHeader.RST,
                     0, tcpHeader.sequenceNumber + 1, 0);
             KLog.w(TAG, "TCP networkToDeviceQueue RST");
@@ -250,9 +250,9 @@ public class TCPOutput implements Runnable
             {
                 tcb.status = TCBStatus.ESTABLISHED;
 
-                selector.wakeup();
-                tcb.selectionKey = outputChannel.register(selector, SelectionKey.OP_READ, tcb);
-                tcb.waitingForNetworkData = true;
+                //selector.wakeup();
+                //tcb.selectionKey = outputChannel.register(selector, SelectionKey.OP_READ, tcb);
+                //tcb.waitingForNetworkData = true;
             }
             else if (tcb.status == TCBStatus.LAST_ACK)
             {
@@ -260,12 +260,15 @@ public class TCPOutput implements Runnable
                 return;
             }
 
-            if (payloadSize == 0) return; // Empty ACK, ignore
+            if (payloadSize == 0) {
+                return; // Empty ACK, ignore
+            }
 
             if (!tcb.waitingForNetworkData)
             {
-                selector.wakeup();
-                tcb.selectionKey.interestOps(SelectionKey.OP_READ);
+                //KLog.i(TAG, "tcb.status = " + tcb.status);
+                //selector.wakeup();
+                //tcb.selectionKey.interestOps(SelectionKey.OP_READ);
                 tcb.waitingForNetworkData = true;
             }
 
@@ -287,6 +290,7 @@ public class TCPOutput implements Runnable
             tcb.theirAcknowledgementNum = tcpHeader.acknowledgementNumber;
             Packet referencePacket = tcb.referencePacket;
             referencePacket.updateTCPBuffer(responseBuffer, (byte) TCPHeader.ACK, tcb.mySequenceNum, tcb.myAcknowledgementNum, 0);
+            KLog.i(TAG, "TCP networkToDeviceQueue ACK");
         }
 
         outputQueue.offer(responseBuffer);

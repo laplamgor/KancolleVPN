@@ -49,9 +49,9 @@ public class UDPInput implements Runnable
             KLog.i(TAG, "Started");
             while (!Thread.interrupted())
             {
-                int readyChannels = selector.select(10);
+                int readyChannels = selector.select();
                 if (readyChannels == 0) {
-                    Thread.sleep(1);
+                    Thread.sleep(10);
                     continue;
                 }
                 //KLog.i(TAG, "readyChannels = " + readyChannels);
@@ -92,7 +92,7 @@ public class UDPInput implements Runnable
         }
         catch (InterruptedException e)
         {
-            KLog.i(TAG, "Stopping");
+            KLog.i(TAG, e.toString());
         }
         catch (IOException e)
         {

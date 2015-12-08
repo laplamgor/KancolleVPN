@@ -90,6 +90,8 @@ public class UDPOutput implements Runnable
                 DatagramChannel outputChannel = channelCache.get(ipAndPort);
                 if (outputChannel == null) {
                     outputChannel = DatagramChannel.open();
+                    vpnService.protect(outputChannel.socket());
+
                     try
                     {
                         outputChannel.connect(new InetSocketAddress(destinationAddress, destinationPort));
@@ -101,15 +103,15 @@ public class UDPOutput implements Runnable
                         ByteBufferPool.release(currentPacket.backingBuffer);
                         continue;
                     }
+
+                    channelCache.put(ipAndPort, outputChannel);
+
                     outputChannel.configureBlocking(false);
                     currentPacket.swapSourceAndDestination();
 
-                    //selector.wakeup();
+                    selector.wakeup();
                     outputChannel.register(selector, SelectionKey.OP_READ, currentPacket);
 
-                    vpnService.protect(outputChannel.socket());
-
-                    channelCache.put(ipAndPort, outputChannel);
                     KLog.i(TAG, "channelCache put ipAndPort = " + ipAndPort);
                 }
                 else {
@@ -134,7 +136,7 @@ public class UDPOutput implements Runnable
         }
         catch (InterruptedException e)
         {
-            KLog.i(TAG, "Stopping");
+            KLog.e(TAG, e.toString());
         }
         catch (IOException e)
         {
