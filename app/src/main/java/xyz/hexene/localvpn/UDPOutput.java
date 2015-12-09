@@ -16,6 +16,8 @@
 
 package xyz.hexene.localvpn;
 
+import android.util.Log;
+
 import com.socks.library.KLog;
 
 import java.io.IOException;
@@ -37,7 +39,7 @@ public class UDPOutput implements Runnable
     private ConcurrentLinkedQueue<Packet> inputQueue;
     private Selector selector;
 
-    private static final int MAX_CACHE_SIZE = 500;
+    private static final int MAX_CACHE_SIZE = 50;
     private LRUCache<String, DatagramChannel> channelCache =
             new LRUCache<>(MAX_CACHE_SIZE, new LRUCache.CleanupCallback<String, DatagramChannel>()
             {
@@ -136,11 +138,11 @@ public class UDPOutput implements Runnable
         }
         catch (InterruptedException e)
         {
-            KLog.e(TAG, e.toString());
+            KLog.w(TAG, e.toString());
         }
         catch (IOException e)
         {
-            KLog.e(TAG, e.toString());
+            Log.e(TAG, e.toString(), e);
         }
         finally
         {
@@ -152,10 +154,13 @@ public class UDPOutput implements Runnable
     private void closeAll()
     {
         KLog.i(TAG, "closeAll");
+        int index = 0;
         Iterator<Map.Entry<String, DatagramChannel>> it = channelCache.entrySet().iterator();
         while (it.hasNext())
         {
-            closeChannel(it.next().getValue());
+            Map.Entry<String, DatagramChannel> item = it.next();
+            KLog.i("close " + index++ +": "+ item.getKey());
+            closeChannel(item.getValue());
             it.remove();
         }
     }

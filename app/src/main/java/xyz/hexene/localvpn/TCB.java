@@ -49,9 +49,10 @@ public class TCB
 
     public SocketChannel channel;
     public boolean waitingForNetworkData;
+    public boolean recvNetworkData;
     public SelectionKey selectionKey;
 
-    private static final int MAX_CACHE_SIZE = 500; // XXX: Is this ideal?
+    private static final int MAX_CACHE_SIZE = 100; // XXX: Is this ideal?
     private static LRUCache<String, TCB> tcbCache =
             new LRUCache<>(MAX_CACHE_SIZE, new LRUCache.CleanupCallback<String, TCB>()
             {
@@ -67,7 +68,7 @@ public class TCB
     {
         synchronized (tcbCache)
         {
-            KLog.i("key = " + ipAndPort);
+            //KLog.i("key = " + ipAndPort);
             return tcbCache.get(ipAndPort);
         }
     }
@@ -110,10 +111,13 @@ public class TCB
         KLog.i("closeAll");
         synchronized (tcbCache)
         {
+            int index = 0;
             Iterator<Map.Entry<String, TCB>> it = tcbCache.entrySet().iterator();
             while (it.hasNext())
             {
-                it.next().getValue().closeChannel();
+                Map.Entry<String, TCB> item = it.next();
+                KLog.i("close " + index++ +": "+ item.getKey());
+                item.getValue().closeChannel();
                 it.remove();
             }
         }

@@ -250,7 +250,7 @@ public class LocalVPNService extends VpnService
             }
             catch (IOException e)
             {
-                KLog.e(TAG, e.toString());
+                Log.e(TAG, e.toString(), e);
             }
             finally
             {

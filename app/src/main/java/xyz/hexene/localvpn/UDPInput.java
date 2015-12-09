@@ -16,6 +16,8 @@
 
 package xyz.hexene.localvpn;
 
+import android.util.Log;
+
 import com.socks.library.KLog;
 
 import java.io.IOException;
@@ -92,11 +94,11 @@ public class UDPInput implements Runnable
         }
         catch (InterruptedException e)
         {
-            KLog.i(TAG, e.toString());
+            KLog.w(TAG, e.toString());
         }
         catch (IOException e)
         {
-            KLog.w(TAG, e.toString());
+            Log.e(TAG, e.toString(), e);
         }
 
         KLog.i("stopped run");
