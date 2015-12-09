@@ -28,7 +28,7 @@ public class ByteBufferPool
     {
         ByteBuffer buffer = pool.poll();
         if (buffer == null)
-            buffer = ByteBuffer.allocateDirect(BUFFER_SIZE); // Using DirectBuffer for zero-copy
+            buffer = ByteBuffer.allocateDirect(BUFFER_SIZE+20); // Using DirectBuffer for zero-copy
         return buffer;
     }
 

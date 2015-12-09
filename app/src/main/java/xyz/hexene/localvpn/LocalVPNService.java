@@ -227,6 +227,7 @@ public class LocalVPNService extends VpnService
                         bufferFromNetwork.flip();
                         while (bufferFromNetwork.hasRemaining()) {
                             //KLog.i(TAG, "vpnOutput");
+                            KLog.i("bufferFromNetwork = ", bufferFromNetwork);
                             vpnOutput.write(bufferFromNetwork);
                         }
                         dataReceived = true;

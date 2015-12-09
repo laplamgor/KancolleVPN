@@ -174,7 +174,9 @@ public class TCPInput implements Runnable
                     referencePacket.updateTCPBuffer(receiveBuffer, (byte) Packet.TCPHeader.FIN, tcb.mySequenceNum, tcb.myAcknowledgementNum, 0);
                     tcb.mySequenceNum++; // FIN counts as a byte
                     KLog.i(TAG, tcb.ipAndPort + " TCP networkToDeviceQueue FIN");
+                    outputQueue.offer(receiveBuffer);
                     TCB.closeTCB(tcb);
+                    return;
                 }
                 else if(tcb.status != TCBStatus.LAST_ACK){
                     TCB.closeTCB(tcb);

@@ -166,8 +166,9 @@ public class TCPOutput implements Runnable
                 currentPacket.updateTCPBuffer(responseBuffer, (byte) TCPHeader.RST, 0, tcb.myAcknowledgementNum, 0);
 
                 KLog.w(TAG, ipAndPort + " TCP networkToDeviceQueue RST");
-
+                outputQueue.offer(responseBuffer);
                 TCB.closeTCB(tcb);//maybe change zhangjie 2015.12.8
+                return;
             }
         } else {
             KLog.w(TAG, ipAndPort + tcpHeader.toString());
@@ -179,7 +180,7 @@ public class TCPOutput implements Runnable
             return;
         }
 
-        outputQueue.offer(responseBuffer);
+        //outputQueue.offer(responseBuffer);
     }
 
     private void processDuplicateSYN(TCB tcb, TCPHeader tcpHeader, ByteBuffer responseBuffer)
