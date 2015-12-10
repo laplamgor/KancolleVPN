@@ -90,25 +90,26 @@ public class TCPOutput implements Runnable
                         destinationPort + ":" + sourcePort;
 
                 TCB tcb = TCB.getTCB(ipAndPort);
+
+                //zhangjie add 2015.12.10
+                if (tcb != null) {
+                    tcb.lastDataExTime = System.currentTimeMillis();
+                }
+
                 if (tcb == null) {
-                    //KLog.i("ipAndPort = " + ipAndPort + "->init");
                     initializeConnection(ipAndPort, destinationAddress, destinationPort,
                             currentPacket, tcpHeader, responseBuffer);
                 }
                 else if (tcpHeader.isSYN()) {
-                    //KLog.i("ipAndPort = " + ipAndPort + "->SYN");
                     processDuplicateSYN(tcb, tcpHeader, responseBuffer);
                 }
                 else if (tcpHeader.isRST()) {
-                    //KLog.i("ipAndPort = " + ipAndPort + "->RST");
                     closeCleanly(tcb, responseBuffer);
                 }
                 else if (tcpHeader.isFIN()) {
-                   //KLog.i("ipAndPort = " + ipAndPort + "->FIN");
                     processFIN(tcb, tcpHeader, responseBuffer);
                 }
                 else if (tcpHeader.isACK()) {
-                    //KLog.i("ipAndPort = " + ipAndPort + "->ACK");
                     processACK(tcb, tcpHeader, payloadBuffer, responseBuffer);
                 }
                 else{
@@ -255,7 +256,7 @@ public class TCPOutput implements Runnable
                 //selector.wakeup();
                 //tcb.selectionKey = outputChannel.register(selector, SelectionKey.OP_READ, tcb);
                 tcb.waitingForNetworkData = true;
-                tcb.recvNetworkData = false;
+
             }
             else if (tcb.status == TCBStatus.LAST_ACK)
             {
@@ -317,5 +318,6 @@ public class TCPOutput implements Runnable
     {
         ByteBufferPool.release(buffer);
         TCB.closeTCB(tcb);
+
     }
 }

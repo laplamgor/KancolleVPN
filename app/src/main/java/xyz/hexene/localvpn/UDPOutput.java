@@ -39,7 +39,7 @@ public class UDPOutput implements Runnable
     private ConcurrentLinkedQueue<Packet> inputQueue;
     private Selector selector;
 
-    private static final int MAX_CACHE_SIZE = 50;
+    private static final int MAX_CACHE_SIZE = 500;
     private LRUCache<String, DatagramChannel> channelCache =
             new LRUCache<>(MAX_CACHE_SIZE, new LRUCache.CleanupCallback<String, DatagramChannel>()
             {
@@ -48,6 +48,11 @@ public class UDPOutput implements Runnable
                 {
                     KLog.i(TAG, "channelCache cleanup ipAndPort = " + eldest.getKey());
                     closeChannel(eldest.getValue());
+                }
+
+                public boolean canCleanup(Map.Entry<String, DatagramChannel> eldest)
+                {
+                    return true;
                 }
             });
 
@@ -167,14 +172,14 @@ public class UDPOutput implements Runnable
 
     private void closeChannel(DatagramChannel channel)
     {
-        KLog.i(TAG, "closeChannel");
+        //KLog.i(TAG, "closeChannel");
         try
         {
             channel.close();
         }
         catch (IOException e)
         {
-            // Ignore
+            KLog.e(TAG, "closeChannel " + e.toString());
         }
     }
 }

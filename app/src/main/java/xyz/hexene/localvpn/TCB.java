@@ -34,6 +34,7 @@ public class TCB
     public long mySequenceNum, theirSequenceNum;
     public long myAcknowledgementNum, theirAcknowledgementNum;
     public TCBStatus status;
+    public long lastDataExTime;
 
     // TCP has more states, but we need only these
     public enum TCBStatus
@@ -49,10 +50,11 @@ public class TCB
 
     public SocketChannel channel;
     public boolean waitingForNetworkData;
-    public boolean recvNetworkData;
     public SelectionKey selectionKey;
 
-    private static final int MAX_CACHE_SIZE = 100; // XXX: Is this ideal?
+    private static final int MAX_CACHE_SIZE = 500; // XXX: Is this ideal?
+    private static final long MAX_WAIT_ACK_TIME = 2*60*1000;//zhangjie add 2015.12.10
+
     private static LRUCache<String, TCB> tcbCache =
             new LRUCache<>(MAX_CACHE_SIZE, new LRUCache.CleanupCallback<String, TCB>()
             {
@@ -61,6 +63,26 @@ public class TCB
                 {
                     KLog.i("cleanup = " + eldest.getKey());
                     eldest.getValue().closeChannel();
+                }
+
+                public boolean canCleanup(Map.Entry<String, TCB> eldest)
+                {
+                    boolean ret = false;
+                    TCBStatus status = eldest.getValue().status;
+
+                    if (status == TCBStatus.CLOSE_WAIT || status == TCBStatus.LAST_ACK){
+
+                        ret = true;
+                    }
+
+                    //zhangjie add 2015.12.10
+                    if (System.currentTimeMillis() - eldest.getValue().lastDataExTime > MAX_WAIT_ACK_TIME){
+                        ret = true;
+                    }
+
+                    KLog.i("canCleanup = " + eldest.getKey());
+
+                    return ret;
                 }
             });
 
@@ -94,6 +116,7 @@ public class TCB
 
         this.channel = channel;
         this.referencePacket = referencePacket;
+        this.lastDataExTime = System.currentTimeMillis();
     }
 
     public static void closeTCB(TCB tcb)
@@ -131,7 +154,7 @@ public class TCB
         }
         catch (IOException e)
         {
-            // Ignore
+            KLog.e("closeChannel ", e.toString());
         }
     }
 }

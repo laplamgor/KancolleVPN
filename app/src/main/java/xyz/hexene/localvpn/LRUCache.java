@@ -36,17 +36,19 @@ public class LRUCache<K, V> extends LinkedHashMap<K, V>
     @Override
     protected boolean removeEldestEntry(Entry<K, V> eldest)
     {
-        if (size() > maxSize)
-        {
+        if (true == callback.canCleanup(eldest)) {
             KLog.i("removeEldestEntry = " + eldest.getKey());
+
             callback.cleanup(eldest);
             return true;
         }
+
         return false;
     }
 
     public static interface CleanupCallback<K, V>
     {
         public void cleanup(Entry<K, V> eldest);
+        public boolean canCleanup(Entry<K, V> eldest);
     }
 }

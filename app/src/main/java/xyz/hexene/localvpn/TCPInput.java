@@ -94,6 +94,9 @@ public class TCPInput implements Runnable
     {
         TCB tcb = (TCB) key.attachment();
         synchronized (tcb) {
+
+            tcb.lastDataExTime = System.currentTimeMillis();//zhangjie add 2015.12.10
+
             Packet referencePacket = tcb.referencePacket;
             try {
                 if (tcb.channel.finishConnect()) {
@@ -139,6 +142,8 @@ public class TCPInput implements Runnable
         synchronized (tcb)
         {
             KLog.i(TAG, tcb.ipAndPort + " tcb.status = " + tcb.status);
+
+            tcb.lastDataExTime = System.currentTimeMillis();//zhangjie add 2015.12.10
 
             Packet referencePacket = tcb.referencePacket;
             SocketChannel inputChannel = (SocketChannel) key.channel();
@@ -195,7 +200,7 @@ public class TCPInput implements Runnable
                         tcb.mySequenceNum, tcb.myAcknowledgementNum, readBytes);
                 tcb.mySequenceNum += readBytes; // Next sequence number
                 receiveBuffer.position(HEADER_SIZE + readBytes);
-                tcb.recvNetworkData = true;
+
                 KLog.i(TAG, tcb.ipAndPort + " TCP networkToDeviceQueue PSH|ACK readBytes = " + readBytes);
             }
         }

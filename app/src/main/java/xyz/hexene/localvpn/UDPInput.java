@@ -56,7 +56,6 @@ public class UDPInput implements Runnable
                     Thread.sleep(10);
                     continue;
                 }
-                //KLog.i(TAG, "readyChannels = " + readyChannels);
 
                 Set<SelectionKey> keys = selector.selectedKeys();
                 Iterator<SelectionKey> keyIterator = keys.iterator();
