@@ -53,12 +53,14 @@ public class TCPInput implements Runnable
             KLog.d(TAG, "Started");
             while (!Thread.interrupted())
             {
-                int readyChannels = selector.select(10);
+                int readyChannels = selector.select();
+                //KLog.i(TAG, "looptest tcpinput readyChannels = " + readyChannels);
                 if (readyChannels == 0) {
-                    Thread.sleep(1);
+                    Thread.sleep(10);
                     continue;
                 }
                 //KLog.i(TAG, "readyChannels = " + readyChannels);
+                //KLog.i(TAG, "looptest tcpinput readyChannels = " + readyChannels);
 
                 Set<SelectionKey> keys = selector.selectedKeys();
                 Iterator<SelectionKey> keyIterator = keys.iterator();
@@ -95,11 +97,12 @@ public class TCPInput implements Runnable
         TCB tcb = (TCB) key.attachment();
         synchronized (tcb) {
 
-            tcb.lastDataExTime = System.currentTimeMillis();//zhangjie add 2015.12.10
-
             Packet referencePacket = tcb.referencePacket;
             try {
                 if (tcb.channel.finishConnect()) {
+
+                    //zhangjie add 2015.12.11
+                    tcb.refreshDataEXTime();
 
                     keyIterator.remove();
                     tcb.status = TCBStatus.SYN_RECEIVED;
@@ -110,6 +113,7 @@ public class TCPInput implements Runnable
                             tcb.mySequenceNum, tcb.myAcknowledgementNum, 0);
 
                     KLog.i(TAG, tcb.ipAndPort + " TCP networkToDeviceQueue SYN|ACK");
+
                     outputQueue.offer(responseBuffer);
 
                     tcb.mySequenceNum++; // SYN counts as a byte
@@ -143,21 +147,23 @@ public class TCPInput implements Runnable
         {
             KLog.i(TAG, tcb.ipAndPort + " tcb.status = " + tcb.status);
 
-            tcb.lastDataExTime = System.currentTimeMillis();//zhangjie add 2015.12.10
+            //zhangjie add 2015.12.11
+            tcb.refreshDataEXTime();
 
             Packet referencePacket = tcb.referencePacket;
             SocketChannel inputChannel = (SocketChannel) key.channel();
-            int readBytes = 0;
+            int readBytes;
             try
             {
                 readBytes = inputChannel.read(receiveBuffer);
+                //KLog.i(TAG, "looptest tcpinput read = " + readBytes);
             }
             catch (IOException e)
             {
                 KLog.e(TAG, tcb.ipAndPort + " Network read error: " + e.toString());
 
-                if(tcb.status == TCBStatus.CLOSE_WAIT){
-
+                if(tcb.status == TCBStatus.CLOSE_WAIT || tcb.status == TCBStatus.LAST_ACK){
+                    KLog.w(TAG, tcb.ipAndPort + " closeTCB status = " + tcb.status);
                 }else {
                     referencePacket.updateTCPBuffer(receiveBuffer, (byte) Packet.TCPHeader.RST, 0, tcb.myAcknowledgementNum, 0);
                     KLog.w(TAG, tcb.ipAndPort + " TCP networkToDeviceQueue RST");
@@ -174,27 +180,30 @@ public class TCPInput implements Runnable
                 key.interestOps(0);
                 tcb.waitingForNetworkData = false;
 
-                if (tcb.status == TCBStatus.CLOSE_WAIT) {
-                    tcb.status = TCBStatus.LAST_ACK;
-                    referencePacket.updateTCPBuffer(receiveBuffer, (byte) Packet.TCPHeader.FIN, tcb.mySequenceNum, tcb.myAcknowledgementNum, 0);
-                    tcb.mySequenceNum++; // FIN counts as a byte
-                    KLog.i(TAG, tcb.ipAndPort + " TCP networkToDeviceQueue FIN");
-                    outputQueue.offer(receiveBuffer);
-                    TCB.closeTCB(tcb);
-                    return;
+                if (tcb.status != TCBStatus.CLOSE_WAIT)
+                {
+                    KLog.i(TAG, "looptest tcpinput status = " + tcb.status);
+                    if (System.currentTimeMillis() - tcb.readDataTime > 30*1000){
+                        KLog.i(TAG, "looptest tcpinput readDataTime > 30*1000");
+                        TCB.closeTCB(tcb);
+                        return;
+                    }
+                    else {
+                        KLog.i(TAG, "looptest tcpinput readDataTime < 30*1000");
+                        ByteBufferPool.release(receiveBuffer);
+                        return;
+                    }
                 }
-                else if(tcb.status != TCBStatus.LAST_ACK){
-                    TCB.closeTCB(tcb);
-                    return;
-                }
-                else {
-                    KLog.i(TAG, tcb.ipAndPort + " readBytes == -1 tcb.status = " + tcb.status);
-                    ByteBufferPool.release(receiveBuffer);
-                    return;
-                }
+
+                tcb.status = TCBStatus.LAST_ACK;
+                referencePacket.updateTCPBuffer(receiveBuffer, (byte) Packet.TCPHeader.FIN, tcb.mySequenceNum, tcb.myAcknowledgementNum, 0);
+                tcb.mySequenceNum++; // FIN counts as a byte
+                KLog.i(TAG, tcb.ipAndPort + " TCP networkToDeviceQueue FIN");
             }
             else
             {
+                tcb.readDataTime = System.currentTimeMillis();
+
                 // XXX: We should ideally be splitting segments by MTU/MSS, but this seems to work without
                 referencePacket.updateTCPBuffer(receiveBuffer, (byte) (Packet.TCPHeader.PSH | Packet.TCPHeader.ACK),
                         tcb.mySequenceNum, tcb.myAcknowledgementNum, readBytes);

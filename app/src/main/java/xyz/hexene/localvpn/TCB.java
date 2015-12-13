@@ -34,7 +34,8 @@ public class TCB
     public long mySequenceNum, theirSequenceNum;
     public long myAcknowledgementNum, theirAcknowledgementNum;
     public TCBStatus status;
-    public long lastDataExTime;
+    private long lastDataExTime;
+    public long readDataTime;
 
     // TCP has more states, but we need only these
     public enum TCBStatus
@@ -71,16 +72,14 @@ public class TCB
                     TCBStatus status = eldest.getValue().status;
 
                     if (status == TCBStatus.CLOSE_WAIT || status == TCBStatus.LAST_ACK){
-
                         ret = true;
+                        KLog.i(eldest.getKey() + " canCleanup status = " + status);
                     }
-
-                    //zhangjie add 2015.12.10
-                    if (System.currentTimeMillis() - eldest.getValue().lastDataExTime > MAX_WAIT_ACK_TIME){
+                    else if (System.currentTimeMillis() - eldest.getValue().lastDataExTime > MAX_WAIT_ACK_TIME){
+                        //zhangjie add 2015.12.10
                         ret = true;
+                        KLog.i(eldest.getKey() + " canCleanup lastDataExTime > " + MAX_WAIT_ACK_TIME);
                     }
-
-                    KLog.i("canCleanup = " + eldest.getKey());
 
                     return ret;
                 }
@@ -121,7 +120,7 @@ public class TCB
 
     public static void closeTCB(TCB tcb)
     {
-        KLog.i("key = " + tcb.ipAndPort);
+        KLog.i("key = " + tcb.ipAndPort + " status = " + tcb.status);
         tcb.closeChannel();
         synchronized (tcbCache)
         {
@@ -139,7 +138,7 @@ public class TCB
             while (it.hasNext())
             {
                 Map.Entry<String, TCB> item = it.next();
-                KLog.i("close " + index++ +": "+ item.getKey());
+                KLog.i("close " + index++ +": "+ item.getKey() + " status = " + item.getValue().status);
                 item.getValue().closeChannel();
                 it.remove();
             }
@@ -157,4 +156,10 @@ public class TCB
             KLog.e("closeChannel ", e.toString());
         }
     }
+
+    //zhangjie add 2015.12.11 for removeEldestEntry
+    public void refreshDataEXTime(){
+        this.lastDataExTime = System.currentTimeMillis();
+    }
+
 }

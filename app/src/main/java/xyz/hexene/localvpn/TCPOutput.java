@@ -66,6 +66,7 @@ public class TCPOutput implements Runnable
                 do
                 {
                     currentPacket = inputQueue.poll();
+                    //KLog.i(TAG, "looptest tcpoutput");
                     if (currentPacket != null)
                         break;
                     Thread.sleep(10);
@@ -91,9 +92,9 @@ public class TCPOutput implements Runnable
 
                 TCB tcb = TCB.getTCB(ipAndPort);
 
-                //zhangjie add 2015.12.10
+                //zhangjie add 2015.12.11
                 if (tcb != null) {
-                    tcb.lastDataExTime = System.currentTimeMillis();
+                    tcb.refreshDataEXTime();
                 }
 
                 if (tcb == null) {
@@ -104,7 +105,9 @@ public class TCPOutput implements Runnable
                     processDuplicateSYN(tcb, tcpHeader, responseBuffer);
                 }
                 else if (tcpHeader.isRST()) {
-                    closeCleanly(tcb, responseBuffer);
+                    KLog.i(TAG, tcb.ipAndPort + " isRST");
+                    //closeCleanly(tcb, responseBuffer);
+                    TCB.closeTCB(tcb);
                 }
                 else if (tcpHeader.isFIN()) {
                     processFIN(tcb, tcpHeader, responseBuffer);
@@ -116,8 +119,10 @@ public class TCPOutput implements Runnable
                     KLog.w("ipAndPort = " + ipAndPort + "->unknow type!!!");
                 }
                 // XXX: cleanup later
-                if (responseBuffer.position() == 0)
+                if (responseBuffer.position() == 0) {
                     ByteBufferPool.release(responseBuffer);
+                }
+
                 ByteBufferPool.release(payloadBuffer);
             }
         }
@@ -159,7 +164,7 @@ public class TCPOutput implements Runnable
                 tcb.status = TCBStatus.SYN_SENT;
                 selector.wakeup();
                 tcb.selectionKey = outputChannel.register(selector, SelectionKey.OP_CONNECT, tcb);
-                return;
+                //return;
             }
             catch (IOException e)
             {
@@ -169,16 +174,16 @@ public class TCPOutput implements Runnable
                 KLog.w(TAG, ipAndPort + " TCP networkToDeviceQueue RST");
                 outputQueue.offer(responseBuffer);
                 TCB.closeTCB(tcb);//maybe change zhangjie 2015.12.8
-                return;
+                //return;
             }
         } else {
-            KLog.w(TAG, ipAndPort + tcpHeader.toString());
+            //KLog.w(TAG, ipAndPort + " " + tcpHeader.toString());
             /* zhangjie 2015.12.9
             currentPacket.updateTCPBuffer(responseBuffer, (byte) TCPHeader.RST,
                     0, tcpHeader.sequenceNumber + 1, 0);
             KLog.w(TAG, ipAndPort + " TCP networkToDeviceQueue RST");
             */
-            return;
+            //return;
         }
 
         //outputQueue.offer(responseBuffer);
@@ -204,8 +209,8 @@ public class TCPOutput implements Runnable
             Packet referencePacket = tcb.referencePacket;
             tcb.myAcknowledgementNum = tcpHeader.sequenceNumber + 1;
             tcb.theirAcknowledgementNum = tcpHeader.acknowledgementNumber;
-
-            if (true/*tcb.recvNetworkData*/) {
+/*
+            if (false) {
                 tcb.status = TCBStatus.LAST_ACK;
                 referencePacket.updateTCPBuffer(responseBuffer, (byte) (TCPHeader.FIN | TCPHeader.ACK),
                         tcb.mySequenceNum, tcb.myAcknowledgementNum, 0);
@@ -215,7 +220,7 @@ public class TCPOutput implements Runnable
                 TCB.closeTCB(tcb);
                 return;
             }
-
+*/
             if (tcb.waitingForNetworkData)
             {
                 tcb.status = TCBStatus.CLOSE_WAIT;
@@ -230,9 +235,9 @@ public class TCPOutput implements Runnable
                         tcb.mySequenceNum, tcb.myAcknowledgementNum, 0);
                 tcb.mySequenceNum++; // FIN counts as a byte
                 KLog.i(TAG, tcb.ipAndPort + " FIN networkToDeviceQueue FIN|ACK");
-                outputQueue.offer(responseBuffer);
-                TCB.closeTCB(tcb);
-                return;
+                //outputQueue.offer(responseBuffer);
+                //TCB.closeTCB(tcb);
+                //return;
             }
         }
 
@@ -253,41 +258,43 @@ public class TCPOutput implements Runnable
             {
                 tcb.status = TCBStatus.ESTABLISHED;
 
-                //selector.wakeup();
+                selector.wakeup();
                 //tcb.selectionKey = outputChannel.register(selector, SelectionKey.OP_READ, tcb);
                 tcb.waitingForNetworkData = true;
-
             }
             else if (tcb.status == TCBStatus.LAST_ACK)
             {
-                closeCleanly(tcb, responseBuffer);
+                //closeCleanly(tcb, responseBuffer);
+                TCB.closeTCB(tcb);
                 return;
             }
 
             if (payloadSize == 0) {
                 return; // Empty ACK, ignore
             }
-/*
+
             if (!tcb.waitingForNetworkData)
             {
-                //KLog.i(TAG, "tcb.status = " + tcb.status);
-                //selector.wakeup();
-                //tcb.selectionKey.interestOps(SelectionKey.OP_READ);
+                KLog.i(TAG, "tcb.status = " + tcb.status);
+                selector.wakeup();
+                tcb.selectionKey.interestOps(SelectionKey.OP_READ);
                 tcb.waitingForNetworkData = true;
             }
-*/
-            selector.wakeup();
+
+            //selector.wakeup();
 
             // Forward to remote server
             try
             {
-                while (payloadBuffer.hasRemaining())
+                while (payloadBuffer.hasRemaining()){
                     outputChannel.write(payloadBuffer);
+                    //KLog.i(TAG, "looptest tcpoutput write");
+                }
             }
             catch (IOException e) {
                 KLog.e(TAG, tcb.ipAndPort + " Network write error: " + e.toString());
-                //sendRST(tcb, payloadSize, responseBuffer);
-                closeCleanly(tcb, responseBuffer);//zhangjie change 2015.12.9
+                sendRST(tcb, payloadSize, responseBuffer);
+                //closeCleanly(tcb, responseBuffer);//zhangjie add 2015.12.9
                 return;
             }
 
@@ -316,8 +323,8 @@ public class TCPOutput implements Runnable
 
     private void closeCleanly(TCB tcb, ByteBuffer buffer)
     {
+        KLog.i(TAG, tcb.ipAndPort + " closeCleanly release");
         ByteBufferPool.release(buffer);
         TCB.closeTCB(tcb);
-
     }
 }

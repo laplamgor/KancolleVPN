@@ -52,6 +52,7 @@ public class UDPInput implements Runnable
             while (!Thread.interrupted())
             {
                 int readyChannels = selector.select();
+                //KLog.i(TAG, "looptest udpinput readyChannels = " + readyChannels);
                 if (readyChannels == 0) {
                     Thread.sleep(10);
                     continue;
@@ -72,7 +73,7 @@ public class UDPInput implements Runnable
                         receiveBuffer.position(HEADER_SIZE);
 
                         DatagramChannel inputChannel = (DatagramChannel) key.channel();
-                        int readBytes = 0;
+                        int readBytes;
                         try {
                             readBytes = inputChannel.read(receiveBuffer);
                         }

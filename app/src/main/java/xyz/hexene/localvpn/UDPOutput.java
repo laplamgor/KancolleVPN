@@ -77,6 +77,7 @@ public class UDPOutput implements Runnable
                 do
                 {
                     currentPacket = inputQueue.poll();
+                    //KLog.i(TAG, "looptest udpoutput");
                     if (currentPacket != null)
                         break;
                     Thread.sleep(10);

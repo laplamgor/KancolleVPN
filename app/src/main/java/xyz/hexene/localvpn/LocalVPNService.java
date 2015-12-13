@@ -53,7 +53,6 @@ public class LocalVPNService extends VpnService
 
     private ConcurrentLinkedQueue<Packet> deviceToNetworkUDPQueue;
     private ConcurrentLinkedQueue<Packet> deviceToNetworkTCPQueue;
-    private ConcurrentLinkedQueue<ByteBuffer> networkToDeviceQueue;
     private ConcurrentLinkedQueue<ByteBuffer> networkUDPToDeviceQueue;
     private ConcurrentLinkedQueue<ByteBuffer> networkTCPToDeviceQueue;
 
@@ -74,7 +73,6 @@ public class LocalVPNService extends VpnService
             tcpSelector = Selector.open();
             deviceToNetworkUDPQueue = new ConcurrentLinkedQueue<>();
             deviceToNetworkTCPQueue = new ConcurrentLinkedQueue<>();
-            //networkToDeviceQueue = new ConcurrentLinkedQueue<>();
             networkUDPToDeviceQueue = new ConcurrentLinkedQueue<>();
             networkTCPToDeviceQueue = new ConcurrentLinkedQueue<>();
 
@@ -134,7 +132,6 @@ public class LocalVPNService extends VpnService
         KLog.i(TAG, "cleanup");
         deviceToNetworkTCPQueue = null;
         deviceToNetworkUDPQueue = null;
-        networkToDeviceQueue = null;
         networkUDPToDeviceQueue = null;
         networkTCPToDeviceQueue = null;
         ByteBufferPool.clear();
@@ -165,21 +162,18 @@ public class LocalVPNService extends VpnService
 
         private ConcurrentLinkedQueue<Packet> deviceToNetworkUDPQueue;
         private ConcurrentLinkedQueue<Packet> deviceToNetworkTCPQueue;
-        private ConcurrentLinkedQueue<ByteBuffer> networkToDeviceQueue;
         private ConcurrentLinkedQueue<ByteBuffer> networkUDPToDeviceQueue;
         private ConcurrentLinkedQueue<ByteBuffer> networkTCPToDeviceQueue;
 
         public VPNRunnable(FileDescriptor vpnFileDescriptor,
                            ConcurrentLinkedQueue<Packet> deviceToNetworkUDPQueue,
                            ConcurrentLinkedQueue<Packet> deviceToNetworkTCPQueue,
-                           //ConcurrentLinkedQueue<ByteBuffer> networkToDeviceQueue,
                            ConcurrentLinkedQueue<ByteBuffer> networkUDPToDeviceQueue,
                            ConcurrentLinkedQueue<ByteBuffer> networkTCPToDeviceQueue)
         {
             this.vpnFileDescriptor = vpnFileDescriptor;
             this.deviceToNetworkUDPQueue = deviceToNetworkUDPQueue;
             this.deviceToNetworkTCPQueue = deviceToNetworkTCPQueue;
-            //this.networkToDeviceQueue = networkToDeviceQueue;
             this.networkUDPToDeviceQueue = networkUDPToDeviceQueue;
             this.networkTCPToDeviceQueue = networkTCPToDeviceQueue;
         }
@@ -205,13 +199,17 @@ public class LocalVPNService extends VpnService
                     else
                         bufferToNetwork.clear();
 
+                    //KLog.i(TAG, "looptest s read before");
+
                     // TODO: Block when not connected
                     int readBytes = vpnInput.read(bufferToNetwork);
+                    //KLog.i(TAG, "looptest s read after = " + readBytes);
                     if (readBytes > 0)
                     {
                         dataSent = true;
                         bufferToNetwork.flip();
                         Packet packet = new Packet(bufferToNetwork);
+
                         if (packet.isUDP())
                         {
                             deviceToNetworkUDPQueue.offer(packet);
@@ -232,15 +230,16 @@ public class LocalVPNService extends VpnService
                     }
 
                     try {
+
                         ByteBuffer bufferFromNetwork = networkTCPToDeviceQueue.poll();
-                        if (bufferFromNetwork != null) {
+                        if (bufferFromNetwork != null && vpnOutput.isOpen()) {
                             bufferFromNetwork.flip();
+                            KLog.i(TAG, "looptest s tcp write before");
                             while (bufferFromNetwork.hasRemaining()) {
-                                //KLog.i("bufferFromNetwork = ", bufferFromNetwork);
                                 vpnOutput.write(bufferFromNetwork);
                             }
+                            //KLog.i(TAG, "looptest s tcp write after");
                             dataTCPReceived = true;
-
                             ByteBufferPool.release(bufferFromNetwork);
                         } else {
                             dataTCPReceived = false;
@@ -252,12 +251,13 @@ public class LocalVPNService extends VpnService
 
                     try {
                         ByteBuffer bufferFromNetwork = networkUDPToDeviceQueue.poll();
-                        if (bufferFromNetwork != null) {
+                        if (bufferFromNetwork != null && vpnOutput.isOpen()) {
                             bufferFromNetwork.flip();
+                            //KLog.i(TAG, "looptest s udp write before");
                             while (bufferFromNetwork.hasRemaining()) {
-                                //KLog.i("bufferFromNetwork = ", bufferFromNetwork);
                                 vpnOutput.write(bufferFromNetwork);
                             }
+                            //KLog.i(TAG, "looptest s udp write after");
                             dataUDPReceived = true;
 
                             ByteBufferPool.release(bufferFromNetwork);
@@ -272,6 +272,7 @@ public class LocalVPNService extends VpnService
                     // TODO: Sleep-looping is not very battery-friendly, consider blocking instead
                     // Confirm if throughput with ConcurrentQueue is really higher compared to BlockingQueue
                     if (!dataSent && !dataUDPReceived && !dataTCPReceived) {
+                        //KLog.i(TAG, "looptest s sleep");
                         Thread.sleep(10);
                     }
                 }
