@@ -1,14 +1,10 @@
 .gradle
-/local.properties
-/.idea/workspace.xml
-/.idea/libraries
+.idea
 .DS_Store
-/build
-*.iml
-/.idea/compiler.xml
-/.idea/encodings.xml
-/.idea/misc.xml
-/.idea/modules.xml
-/.idea/vcs.xml
+build
+captures
+LocalVPN.iml
+local.properties
+
 
 
