@@ -199,11 +199,8 @@ public class LocalVPNService extends VpnService
                     else
                         bufferToNetwork.clear();
 
-                    //KLog.i(TAG, "looptest s read before");
-
                     // TODO: Block when not connected
                     int readBytes = vpnInput.read(bufferToNetwork);
-                    //KLog.i(TAG, "looptest s read after = " + readBytes);
                     if (readBytes > 0)
                     {
                         dataSent = true;
@@ -234,11 +231,9 @@ public class LocalVPNService extends VpnService
                         ByteBuffer bufferFromNetwork = networkTCPToDeviceQueue.poll();
                         if (bufferFromNetwork != null && vpnOutput.isOpen()) {
                             bufferFromNetwork.flip();
-                            KLog.i(TAG, "looptest s tcp write before");
                             while (bufferFromNetwork.hasRemaining()) {
                                 vpnOutput.write(bufferFromNetwork);
                             }
-                            //KLog.i(TAG, "looptest s tcp write after");
                             dataTCPReceived = true;
                             ByteBufferPool.release(bufferFromNetwork);
                         } else {
@@ -253,11 +248,9 @@ public class LocalVPNService extends VpnService
                         ByteBuffer bufferFromNetwork = networkUDPToDeviceQueue.poll();
                         if (bufferFromNetwork != null && vpnOutput.isOpen()) {
                             bufferFromNetwork.flip();
-                            //KLog.i(TAG, "looptest s udp write before");
                             while (bufferFromNetwork.hasRemaining()) {
                                 vpnOutput.write(bufferFromNetwork);
                             }
-                            //KLog.i(TAG, "looptest s udp write after");
                             dataUDPReceived = true;
 
                             ByteBufferPool.release(bufferFromNetwork);
@@ -272,7 +265,6 @@ public class LocalVPNService extends VpnService
                     // TODO: Sleep-looping is not very battery-friendly, consider blocking instead
                     // Confirm if throughput with ConcurrentQueue is really higher compared to BlockingQueue
                     if (!dataSent && !dataUDPReceived && !dataTCPReceived) {
-                        //KLog.i(TAG, "looptest s sleep");
                         Thread.sleep(10);
                     }
                 }

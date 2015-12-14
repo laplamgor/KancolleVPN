@@ -66,7 +66,7 @@ public class TCPOutput implements Runnable
                 do
                 {
                     currentPacket = inputQueue.poll();
-                    //KLog.i(TAG, "looptest tcpoutput");
+
                     if (currentPacket != null)
                         break;
                     Thread.sleep(10);
@@ -288,7 +288,6 @@ public class TCPOutput implements Runnable
             {
                 while (payloadBuffer.hasRemaining()){
                     outputChannel.write(payloadBuffer);
-                    //KLog.i(TAG, "looptest tcpoutput write");
                 }
             }
             catch (IOException e) {

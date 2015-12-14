@@ -54,13 +54,12 @@ public class TCPInput implements Runnable
             while (!Thread.interrupted())
             {
                 int readyChannels = selector.select();
-                //KLog.i(TAG, "looptest tcpinput readyChannels = " + readyChannels);
+
                 if (readyChannels == 0) {
                     Thread.sleep(10);
                     continue;
                 }
                 //KLog.i(TAG, "readyChannels = " + readyChannels);
-                //KLog.i(TAG, "looptest tcpinput readyChannels = " + readyChannels);
 
                 Set<SelectionKey> keys = selector.selectedKeys();
                 Iterator<SelectionKey> keyIterator = keys.iterator();
@@ -156,7 +155,6 @@ public class TCPInput implements Runnable
             try
             {
                 readBytes = inputChannel.read(receiveBuffer);
-                //KLog.i(TAG, "looptest tcpinput read = " + readBytes);
             }
             catch (IOException e)
             {
@@ -182,14 +180,13 @@ public class TCPInput implements Runnable
 
                 if (tcb.status != TCBStatus.CLOSE_WAIT)
                 {
-                    KLog.i(TAG, "looptest tcpinput status = " + tcb.status);
                     if (System.currentTimeMillis() - tcb.readDataTime > 30*1000){
-                        KLog.i(TAG, "looptest tcpinput readDataTime > 30*1000");
+                        KLog.i(TAG, tcb.ipAndPort + " TCP readDataTime > 30*1000");
                         TCB.closeTCB(tcb);
                         return;
                     }
                     else {
-                        KLog.i(TAG, "looptest tcpinput readDataTime < 30*1000");
+                        //KLog.i(TAG, tcb.ipAndPort + " TCP tcpinput readDataTime < 30*1000");
                         ByteBufferPool.release(receiveBuffer);
                         return;
                     }
