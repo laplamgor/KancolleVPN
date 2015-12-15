@@ -48,8 +48,12 @@ public class LocalVPNService extends VpnService
     private static boolean isRunning = false;
 
     private ParcelFileDescriptor vpnInterface = null;
-
     private PendingIntent pendingIntent;
+
+    private static boolean isUseWeProxy = true;
+    public boolean mWeProxyAvailability;
+    public String mWeProxyHost;
+    public int mWeProxyPort;
 
     private ConcurrentLinkedQueue<Packet> deviceToNetworkUDPQueue;
     private ConcurrentLinkedQueue<Packet> deviceToNetworkTCPQueue;
@@ -76,7 +80,17 @@ public class LocalVPNService extends VpnService
             networkUDPToDeviceQueue = new ConcurrentLinkedQueue<>();
             networkTCPToDeviceQueue = new ConcurrentLinkedQueue<>();
 
-            executorService = Executors.newFixedThreadPool(5);
+            int nThreads = 5;
+            // TODO: 15-12-15 use weproxy config
+            if (isUseWeProxy){
+                nThreads++;
+            }
+
+            executorService = Executors.newFixedThreadPool(nThreads);
+
+            if (isUseWeProxy) {
+                executorService.submit(new WebEyeProxyManager(this));
+            }
             executorService.submit(new UDPInput(networkUDPToDeviceQueue, udpSelector));
             executorService.submit(new UDPOutput(deviceToNetworkUDPQueue, udpSelector, this));
             executorService.submit(new TCPInput(networkTCPToDeviceQueue, tcpSelector));
@@ -154,6 +168,15 @@ public class LocalVPNService extends VpnService
         }
     }
 
+    public void setWeProxyAvailability(boolean proxyAvailability) { mWeProxyAvailability = proxyAvailability; }
+    public boolean getWeProxyAvailability() { return mWeProxyAvailability; }
+
+    public void setWeProxyHost(String host) { mWeProxyHost = host; }
+    public String getWeProxyHost() { return mWeProxyHost; }
+
+    public void setWeProxyPort(int port) { mWeProxyPort = port; }
+    public int getWeProxyPort() { return mWeProxyPort; }
+
     private static class VPNRunnable implements Runnable
     {
         private static final String TAG = VPNRunnable.class.getSimpleName();
@@ -207,6 +230,8 @@ public class LocalVPNService extends VpnService
                         bufferToNetwork.flip();
                         Packet packet = new Packet(bufferToNetwork);
 
+                        //KLog.i(TAG, packet.toString());
+
                         if (packet.isUDP())
                         {
                             deviceToNetworkUDPQueue.offer(packet);
@@ -231,6 +256,10 @@ public class LocalVPNService extends VpnService
                         ByteBuffer bufferFromNetwork = networkTCPToDeviceQueue.poll();
                         if (bufferFromNetwork != null && vpnOutput.isOpen()) {
                             bufferFromNetwork.flip();
+
+                            //Packet packet = new Packet(bufferFromNetwork);
+                            //KLog.i(TAG, "repo " + packet.toString());
+
                             while (bufferFromNetwork.hasRemaining()) {
                                 vpnOutput.write(bufferFromNetwork);
                             }

@@ -43,6 +43,7 @@ public class TCPOutput implements Runnable
     private Selector selector;
 
     private Random random = new Random();
+
     public TCPOutput(ConcurrentLinkedQueue<Packet> inputQueue, ConcurrentLinkedQueue<ByteBuffer> outputQueue,
                      Selector selector, LocalVPNService vpnService)
     {
@@ -159,7 +160,14 @@ public class TCPOutput implements Runnable
 
             try
             {
-                outputChannel.connect(new InetSocketAddress(destinationAddress, destinationPort));
+                if (destinationPort == 80 && vpnService.getWeProxyAvailability()){
+                    KLog.i(TAG, ipAndPort + " use proxy " + vpnService.getWeProxyHost() + ":"+vpnService.getWeProxyPort());
+                    outputChannel.connect(new InetSocketAddress(vpnService.getWeProxyHost(), vpnService.getWeProxyPort()));
+                }
+                else {
+                    outputChannel.connect(new InetSocketAddress(destinationAddress, destinationPort));
+                }
+
 
                 tcb.status = TCBStatus.SYN_SENT;
                 selector.wakeup();

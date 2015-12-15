@@ -210,6 +210,25 @@ public class Packet
             tcpHeader.fillHeader(buffer);
     }
 
+
+    public boolean goProxy(){
+        boolean ret = false;
+        int destinationPort = 0;
+
+        if (isTCP) {
+            destinationPort = tcpHeader.destinationPort;
+        }
+        else if (isUDP) {
+            destinationPort = udpHeader.destinationPort;
+        }
+
+        if (destinationPort == 80){
+            ret = true;
+        }
+
+        return ret;
+    }
+
     public static class IP4Header
     {
         public byte version;
@@ -495,4 +514,5 @@ public class Packet
             return value & 0xFFFFFFFFL;
         }
     }
+
 }
