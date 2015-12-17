@@ -36,7 +36,7 @@ public class LocalVPN extends ActionBarActivity
 
     private boolean waitingForVPNStart;
 
-    private BroadcastReceiver vpnStateReceiver = new BroadcastReceiver()
+    private final BroadcastReceiver vpnStateReceiver = new BroadcastReceiver()
     {
         @Override
         public void onReceive(Context context, Intent intent)

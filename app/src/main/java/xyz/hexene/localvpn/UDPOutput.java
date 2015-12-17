@@ -31,30 +31,13 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-public class UDPOutput implements Runnable
+class UDPOutput implements Runnable
 {
     private static final String TAG = UDPOutput.class.getSimpleName();
 
     private LocalVPNService vpnService;
     private ConcurrentLinkedQueue<Packet> inputQueue;
     private Selector selector;
-
-    private static final int MAX_CACHE_SIZE = 500;
-    private LRUCache<String, DatagramChannel> channelCache =
-            new LRUCache<>(MAX_CACHE_SIZE, new LRUCache.CleanupCallback<String, DatagramChannel>()
-            {
-                @Override
-                public void cleanup(Map.Entry<String, DatagramChannel> eldest)
-                {
-                    KLog.i(TAG, "channelCache cleanup ipAndPort = " + eldest.getKey());
-                    closeChannel(eldest.getValue());
-                }
-
-                public boolean canCleanup(Map.Entry<String, DatagramChannel> eldest)
-                {
-                    return true;
-                }
-            });
 
     public UDPOutput(ConcurrentLinkedQueue<Packet> inputQueue, Selector selector, LocalVPNService vpnService)
     {
@@ -69,10 +52,12 @@ public class UDPOutput implements Runnable
         KLog.i(TAG, "Started");
         try
         {
+            Packet currentPacket;
+            UDB udb;
+            DatagramChannel outputChannel;
             Thread currentThread = Thread.currentThread();
             while (true)
             {
-                Packet currentPacket;
                 // TODO: Block when not connected
                 do
                 {
@@ -88,6 +73,9 @@ public class UDPOutput implements Runnable
                     break;
                 }
 
+                ByteBuffer payloadBuffer = currentPacket.backingBuffer;
+                currentPacket.backingBuffer = null;
+
                 InetAddress destinationAddress = currentPacket.ip4Header.destinationAddress;
                 int destinationPort = currentPacket.udpHeader.destinationPort;
                 int sourcePort = currentPacket.udpHeader.sourcePort;
@@ -95,51 +83,60 @@ public class UDPOutput implements Runnable
                 String ipAndPort = destinationAddress.getHostAddress() + ":" + destinationPort + ":" + sourcePort;
                 //KLog.i(TAG, "ipAndPort = " + ipAndPort);
 
-                DatagramChannel outputChannel = channelCache.get(ipAndPort);
-                if (outputChannel == null) {
+                udb = UDB.getUDB(ipAndPort);
+                if (udb == null) {
                     outputChannel = DatagramChannel.open();
                     vpnService.protect(outputChannel.socket());
 
                     try
                     {
+                        outputChannel.socket().setReceiveBufferSize(65535);
                         outputChannel.connect(new InetSocketAddress(destinationAddress, destinationPort));
                     }
                     catch (IOException e)
                     {
-                        KLog.e(TAG, "Connection error: " + ipAndPort + e.toString());
+                        KLog.e(TAG, ipAndPort + " Connection error: " + e.toString());
                         closeChannel(outputChannel);
-                        ByteBufferPool.release(currentPacket.backingBuffer);
+                        ByteBufferPool.release(payloadBuffer);
                         continue;
                     }
 
-                    channelCache.put(ipAndPort, outputChannel);
+                    if (!outputChannel.isConnected()){
+                        KLog.e(TAG, ipAndPort + " isConnected fail!!!");
+                        closeChannel(outputChannel);
+                        ByteBufferPool.release(payloadBuffer);
+                        continue;
+                    }
 
-                    outputChannel.configureBlocking(false);
                     currentPacket.swapSourceAndDestination();
 
+                    udb = new UDB(ipAndPort, outputChannel, currentPacket);
+                    UDB.putUDB(ipAndPort, udb);
+
+                    outputChannel.configureBlocking(false);
                     selector.wakeup();
-                    outputChannel.register(selector, SelectionKey.OP_READ, currentPacket);
-
-                    KLog.i(TAG, "channelCache put ipAndPort = " + ipAndPort);
-                }
-                else {
-                    KLog.i(TAG, "channelCache get ipAndPort = " + ipAndPort);
+                    outputChannel.register(selector, SelectionKey.OP_READ, udb);
                 }
 
-                try
-                {
-                    ByteBuffer payloadBuffer = currentPacket.backingBuffer;
-                    while (payloadBuffer.hasRemaining())
-                        outputChannel.write(payloadBuffer);
+                synchronized (udb){
+                    outputChannel = udb.channel;
+                    try
+                    {
+                        while (payloadBuffer.hasRemaining())
+                            outputChannel.write(payloadBuffer);
+                    }
+                    catch (IOException e)
+                    {
+                        KLog.e(TAG, ipAndPort + " write error: " + e.toString());
+
+                        ByteBufferPool.release(payloadBuffer);
+                        UDB.closeUDB(udb);
+                        continue;
+                    }
+                    udb.refreshDataEXTime();
                 }
-                catch (IOException e)
-                {
-                    KLog.e(TAG, "Network write error: " + ipAndPort + e.toString());
-                    KLog.i(TAG, "channelCache remove ipAndPort = " + ipAndPort);
-                    closeChannel(outputChannel);
-                    channelCache.remove(ipAndPort);
-                }
-                ByteBufferPool.release(currentPacket.backingBuffer);
+                KLog.i(TAG, ipAndPort + " writeBytes = " + payloadBuffer.position());
+                ByteBufferPool.release(payloadBuffer);
             }
         }
         catch (InterruptedException e)
@@ -152,24 +149,11 @@ public class UDPOutput implements Runnable
         }
         finally
         {
-            closeAll();
+            UDB.closeAll();
+            KLog.i("stopped run");
         }
-        KLog.i("stopped run");
     }
 
-    private void closeAll()
-    {
-        KLog.i(TAG, "closeAll");
-        int index = 0;
-        Iterator<Map.Entry<String, DatagramChannel>> it = channelCache.entrySet().iterator();
-        while (it.hasNext())
-        {
-            Map.Entry<String, DatagramChannel> item = it.next();
-            KLog.i("close " + index++ +": "+ item.getKey());
-            closeChannel(item.getValue());
-            it.remove();
-        }
-    }
 
     private void closeChannel(DatagramChannel channel)
     {

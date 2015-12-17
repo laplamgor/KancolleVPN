@@ -5,16 +5,10 @@ package xyz.hexene.localvpn;
  */
 
 import com.socks.library.KLog;
-
-import android.content.Context;
-import android.util.Log;
-
 //import com.webeye.android.weproxy.WeProxyManager;
 
-import java.io.IOException;
 
-
-public class WebEyeProxyManager implements Runnable {
+class WebEyeProxyManager implements Runnable {
     private static final String TAG = WebEyeProxyManager.class.getSimpleName();
     private LocalVPNService vpnService;
 
@@ -31,7 +25,7 @@ public class WebEyeProxyManager implements Runnable {
      * WebEyeProxyManager
      * Call from Application.onTerminate(), which is not guaranteed to ever be called.
      */
-    public void onTerminate() {
+    private void onTerminate() {
         vpnService.setWeProxyAvailability(false);
         //WeProxyManager.getInstance().enableWebeyeProxy(false);
     }

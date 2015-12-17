@@ -31,7 +31,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 import xyz.hexene.localvpn.TCB.TCBStatus;
 
-public class TCPInput implements Runnable
+class TCPInput implements Runnable
 {
     private static final String TAG = TCPInput.class.getSimpleName();
     private static final int HEADER_SIZE = Packet.IP4_HEADER_SIZE + Packet.TCP_HEADER_SIZE;
@@ -87,8 +87,9 @@ public class TCPInput implements Runnable
         {
             Log.e(TAG, e.toString(), e);
         }
-
-        KLog.i("stopped run");
+        finally {
+            KLog.i("stopped run");
+        }
     }
 
     private void processConnect(SelectionKey key, Iterator<SelectionKey> keyIterator)
@@ -144,7 +145,7 @@ public class TCPInput implements Runnable
         TCB tcb = (TCB) key.attachment();
         synchronized (tcb)
         {
-            KLog.i(TAG, tcb.ipAndPort + " tcb.status = " + tcb.status);
+            //KLog.i(TAG, tcb.ipAndPort + " tcb.status = " + tcb.status);
 
             //zhangjie add 2015.12.11
             tcb.refreshDataEXTime();

@@ -50,10 +50,10 @@ public class LocalVPNService extends VpnService
     private ParcelFileDescriptor vpnInterface = null;
     private PendingIntent pendingIntent;
 
-    private static boolean isUseWeProxy = true;
-    public boolean mWeProxyAvailability;
-    public String mWeProxyHost;
-    public int mWeProxyPort;
+    private static final boolean isUseWeProxy = false;
+    private boolean mWeProxyAvailability;
+    private String mWeProxyHost;
+    private int mWeProxyPort;
 
     private ConcurrentLinkedQueue<Packet> deviceToNetworkUDPQueue;
     private ConcurrentLinkedQueue<Packet> deviceToNetworkTCPQueue;
@@ -309,9 +309,8 @@ public class LocalVPNService extends VpnService
             finally
             {
                 closeResources(vpnInput, vpnOutput);
+                KLog.i("stopped run");
             }
-
-            KLog.i("stopped run");
         }
     }
 }

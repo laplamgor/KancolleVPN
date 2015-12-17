@@ -29,7 +29,7 @@ import java.util.Iterator;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-public class UDPInput implements Runnable
+class UDPInput implements Runnable
 {
     private static final String TAG = UDPInput.class.getSimpleName();
     private static final int HEADER_SIZE = Packet.IP4_HEADER_SIZE + Packet.UDP_HEADER_SIZE;
@@ -72,21 +72,25 @@ public class UDPInput implements Runnable
                         // Leave space for the header
                         receiveBuffer.position(HEADER_SIZE);
 
-                        DatagramChannel inputChannel = (DatagramChannel) key.channel();
                         int readBytes;
-                        try {
-                            readBytes = inputChannel.read(receiveBuffer);
-                        }
-                        catch (IOException e){
-                            KLog.e(TAG, "Network read error: " + e.toString());
-                            continue;
+                        DatagramChannel inputChannel = (DatagramChannel) key.channel();
+                        UDB udb = (UDB) key.attachment();
+                        synchronized (udb){
+                            try {
+                                readBytes = inputChannel.read(receiveBuffer);
+                            }
+                            catch (IOException e){
+                                KLog.e(TAG, udb.ipAndPort + " read error: " + e.toString());
+                                UDB.closeUDB(udb);
+                                continue;
+                            }
+                            udb.refreshDataEXTime();
+                            Packet referencePacket = udb.referencePacket;
+                            referencePacket.updateUDPBuffer(receiveBuffer, readBytes);
+                            receiveBuffer.position(HEADER_SIZE + readBytes);
                         }
 
-                        Packet referencePacket = (Packet) key.attachment();
-                        referencePacket.updateUDPBuffer(receiveBuffer, readBytes);
-                        receiveBuffer.position(HEADER_SIZE + readBytes);
-
-                        KLog.i(TAG, "networkToDeviceQueue UDP readBytes = " + readBytes);
+                        KLog.i(TAG, udb.ipAndPort + " networkToDeviceQueue UDP readBytes = " + readBytes);
                         outputQueue.offer(receiveBuffer);
                     }
                 }
@@ -100,7 +104,8 @@ public class UDPInput implements Runnable
         {
             Log.e(TAG, e.toString(), e);
         }
-
-        KLog.i("stopped run");
+        finally {
+            KLog.i("stopped run");
+        }
     }
 }

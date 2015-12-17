@@ -20,7 +20,7 @@ import com.socks.library.KLog;
 
 import java.util.LinkedHashMap;
 
-public class LRUCache<K, V> extends LinkedHashMap<K, V>
+class LRUCache<K, V> extends LinkedHashMap<K, V>
 {
     private int maxSize;
     private CleanupCallback callback;
@@ -36,7 +36,7 @@ public class LRUCache<K, V> extends LinkedHashMap<K, V>
     @Override
     protected boolean removeEldestEntry(Entry<K, V> eldest)
     {
-        if (true == callback.canCleanup(eldest)) {
+        if (callback.canCleanup(eldest)) {
             KLog.i("removeEldestEntry = " + eldest.getKey());
 
             callback.cleanup(eldest);
@@ -46,9 +46,9 @@ public class LRUCache<K, V> extends LinkedHashMap<K, V>
         return false;
     }
 
-    public static interface CleanupCallback<K, V>
+    public interface CleanupCallback<K, V>
     {
-        public void cleanup(Entry<K, V> eldest);
-        public boolean canCleanup(Entry<K, V> eldest);
+        void cleanup(Entry<K, V> eldest);
+        boolean canCleanup(Entry<K, V> eldest);
     }
 }

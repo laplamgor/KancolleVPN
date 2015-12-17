@@ -138,7 +138,7 @@ public class TCB
             while (it.hasNext())
             {
                 Map.Entry<String, TCB> item = it.next();
-                KLog.i("close " + index++ +": "+ item.getKey() + " status = " + item.getValue().status);
+                KLog.i("close " + ++index +": "+ item.getKey() + " status = " + item.getValue().status);
                 item.getValue().closeChannel();
                 it.remove();
             }
