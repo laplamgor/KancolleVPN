@@ -24,11 +24,11 @@ import java.nio.channels.SelectionKey;
 import java.util.Iterator;
 import java.util.Map;
 
+
 /**
  * Transmission Control Block
  */
-public class UDB
-{
+public class UDB {
     public String ipAndPort;
     public DatagramChannel channel;
     public Packet referencePacket;
@@ -36,22 +36,19 @@ public class UDB
     private long lastDataExTime;
 
     private static final int MAX_CACHE_SIZE = 500;
-    private static final long MAX_WAIT_DATA_TIME = 60*1000;
+    private static final long MAX_WAIT_DATA_TIME = 60 * 1000;
 
     private static LRUCache<String, UDB> udbCache =
-            new LRUCache<>(MAX_CACHE_SIZE, new LRUCache.CleanupCallback<String, UDB>()
-            {
+            new LRUCache<>(MAX_CACHE_SIZE, new LRUCache.CleanupCallback<String, UDB>() {
                 @Override
-                public void cleanup(Map.Entry<String, UDB> eldest)
-                {
+                public void cleanup(Map.Entry<String, UDB> eldest) {
                     KLog.i("cleanup = " + eldest.getKey());
                     eldest.getValue().closeChannel();
                 }
 
-                public boolean canCleanup(Map.Entry<String, UDB> eldest)
-                {
+                public boolean canCleanup(Map.Entry<String, UDB> eldest) {
                     boolean ret = false;
-                    if (System.currentTimeMillis() - eldest.getValue().lastDataExTime > MAX_WAIT_DATA_TIME){
+                    if (System.currentTimeMillis() - eldest.getValue().lastDataExTime > MAX_WAIT_DATA_TIME) {
                         ret = true;
                         KLog.i(eldest.getKey() + " canCleanup lastDataExTime > " + MAX_WAIT_DATA_TIME);
                     }
@@ -60,26 +57,21 @@ public class UDB
                 }
             });
 
-    public static UDB getUDB(String ipAndPort)
-    {
-        synchronized (udbCache)
-        {
+    public static UDB getUDB(String ipAndPort) {
+        synchronized (udbCache) {
             //KLog.i("key = " + ipAndPort);
             return udbCache.get(ipAndPort);
         }
     }
 
-    public static void putUDB(String ipAndPort, UDB udb)
-    {
-        synchronized (udbCache)
-        {
+    public static void putUDB(String ipAndPort, UDB udb) {
+        synchronized (udbCache) {
             KLog.i("key = " + ipAndPort);
             udbCache.put(ipAndPort, udb);
         }
     }
 
-    public UDB(String ipAndPort, DatagramChannel channel, Packet referencePacket)
-    {
+    public UDB(String ipAndPort, DatagramChannel channel, Packet referencePacket) {
         this.ipAndPort = ipAndPort;
         this.channel = channel;
         this.referencePacket = referencePacket;
@@ -87,47 +79,37 @@ public class UDB
         this.lastDataExTime = System.currentTimeMillis();
     }
 
-    public static void closeUDB(UDB udb)
-    {
+    public static void closeUDB(UDB udb) {
         KLog.i("key = " + udb.ipAndPort);
         udb.closeChannel();
-        synchronized (udbCache)
-        {
+        synchronized (udbCache) {
             udbCache.remove(udb.ipAndPort);
         }
     }
 
-    public static void closeAll()
-    {
+    public static void closeAll() {
         KLog.i("closeAll");
-        synchronized (udbCache)
-        {
+        synchronized (udbCache) {
             int index = 0;
             Iterator<Map.Entry<String, UDB>> it = udbCache.entrySet().iterator();
-            while (it.hasNext())
-            {
+            while (it.hasNext()) {
                 Map.Entry<String, UDB> item = it.next();
-                KLog.i("close " + ++index +": "+ item.getKey());
+                KLog.i("close " + ++index +": " + item.getKey());
                 item.getValue().closeChannel();
                 it.remove();
             }
         }
     }
 
-    private void closeChannel()
-    {
-        try
-        {
+    private void closeChannel() {
+        try {
             channel.close();
-        }
-        catch (IOException e)
-        {
+        } catch (IOException e) {
             KLog.e("closeChannel ", e.toString());
         }
     }
 
-    public void refreshDataEXTime(){
+    public void refreshDataEXTime() {
         this.lastDataExTime = System.currentTimeMillis();
     }
-
 }

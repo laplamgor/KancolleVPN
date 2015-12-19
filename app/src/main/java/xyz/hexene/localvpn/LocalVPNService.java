@@ -113,6 +113,9 @@ public class LocalVPNService extends VpnService
     {
         if (vpnInterface == null)
         {
+            Intent statusActivityIntent = new Intent(this, LocalVPN.class);
+            pendingIntent = PendingIntent.getActivity(this, 0, statusActivityIntent, 0);
+
             Builder builder = new Builder();
             builder.addAddress(VPN_ADDRESS, 32);
             builder.addRoute(VPN_ROUTE, 0);
@@ -222,6 +225,9 @@ public class LocalVPNService extends VpnService
                     else
                         bufferToNetwork.clear();
 
+                    //if (!vpnInput.isOpen()){
+                    //    KLog.e(TAG, "vpnInput is close !!!");
+                    //}
                     // TODO: Block when not connected
                     int readBytes = vpnInput.read(bufferToNetwork);
                     if (readBytes > 0)
@@ -251,8 +257,11 @@ public class LocalVPNService extends VpnService
                         dataSent = false;
                     }
 
-                    try {
+                    //if (!vpnOutput.isOpen()){
+                    //    KLog.e(TAG, "vpnOutput is close !!!");
+                    //}
 
+                    try {
                         ByteBuffer bufferFromNetwork = networkTCPToDeviceQueue.poll();
                         if (bufferFromNetwork != null && vpnOutput.isOpen()) {
                             bufferFromNetwork.flip();

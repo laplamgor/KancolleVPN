@@ -145,7 +145,7 @@ class TCPInput implements Runnable
         TCB tcb = (TCB) key.attachment();
         synchronized (tcb)
         {
-            //KLog.i(TAG, tcb.ipAndPort + " tcb.status = " + tcb.status);
+            //KLog.i(TAG, tcb.ipAndPort + " status = " + tcb.status);
 
             //zhangjie add 2015.12.11
             tcb.refreshDataEXTime();
@@ -181,8 +181,8 @@ class TCPInput implements Runnable
 
                 if (tcb.status != TCBStatus.CLOSE_WAIT)
                 {
-                    if (System.currentTimeMillis() - tcb.readDataTime > 30*1000){
-                        KLog.i(TAG, tcb.ipAndPort + " TCP readDataTime > 30*1000");
+                    if ((System.currentTimeMillis() - tcb.readDataTime > 30*1000)){
+                        KLog.i(TAG, tcb.ipAndPort + " status = " + tcb.status + " readDataTime > 30*1000");
                         TCB.closeTCB(tcb);
                         return;
                     }

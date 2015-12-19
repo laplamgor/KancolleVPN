@@ -227,7 +227,7 @@ class TCPOutput implements Runnable {
         synchronized (tcb) {
             SocketChannel outputChannel = tcb.channel;
 
-            KLog.i(TAG, tcb.ipAndPort + " ACK tcb.status = " + tcb.status + ";payloadSize = " + payloadSize);
+            KLog.i(TAG, tcb.ipAndPort + " ACK status = " + tcb.status + "; payloadSize = " + payloadSize);
 
             if (tcb.status == TCBStatus.SYN_RECEIVED) {
                 tcb.status = TCBStatus.ESTABLISHED;
@@ -246,7 +246,7 @@ class TCPOutput implements Runnable {
             }
 
             if (!tcb.waitingForNetworkData) {
-                //KLog.i(TAG, "tcb.status = " + tcb.status);
+                //KLog.i(TAG, "status = " + tcb.status);
                 selector.wakeup();
                 tcb.selectionKey.interestOps(SelectionKey.OP_READ);
                 tcb.waitingForNetworkData = true;
