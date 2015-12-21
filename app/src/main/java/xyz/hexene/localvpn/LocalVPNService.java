@@ -37,11 +37,11 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class LocalVPNService extends VpnService
-{
+public class LocalVPNService extends VpnService {
     private static final String TAG = LocalVPNService.class.getSimpleName();
     private static final String VPN_ADDRESS = "10.0.0.2"; // Only IPv4 support for now
     private static final String VPN_ROUTE = "0.0.0.0"; // Intercept everything
+    private static int SLEEP_TIME = 10;
 
     public static final String BROADCAST_VPN_STATE = "xyz.hexene.localvpn.VPN_STATE";
 
@@ -57,8 +57,7 @@ public class LocalVPNService extends VpnService
 
     private ConcurrentLinkedQueue<Packet> deviceToNetworkUDPQueue;
     private ConcurrentLinkedQueue<Packet> deviceToNetworkTCPQueue;
-    private ConcurrentLinkedQueue<ByteBuffer> networkUDPToDeviceQueue;
-    private ConcurrentLinkedQueue<ByteBuffer> networkTCPToDeviceQueue;
+    private ConcurrentLinkedQueue<ByteBuffer> networkToDeviceQueue;
 
     private ExecutorService executorService;
 
@@ -66,23 +65,21 @@ public class LocalVPNService extends VpnService
     private Selector tcpSelector;
 
     @Override
-    public void onCreate()
-    {
+    public void onCreate() {
         super.onCreate();
         isRunning = true;
         setupVPN();
-        try
-        {
+
+        try {
             udpSelector = Selector.open();
             tcpSelector = Selector.open();
             deviceToNetworkUDPQueue = new ConcurrentLinkedQueue<>();
             deviceToNetworkTCPQueue = new ConcurrentLinkedQueue<>();
-            networkUDPToDeviceQueue = new ConcurrentLinkedQueue<>();
-            networkTCPToDeviceQueue = new ConcurrentLinkedQueue<>();
+            networkToDeviceQueue = new ConcurrentLinkedQueue<>();
 
             int nThreads = 5;
             // TODO: 15-12-15 use weproxy config
-            if (isUseWeProxy){
+            if (isUseWeProxy) {
                 nThreads++;
             }
 
@@ -91,52 +88,50 @@ public class LocalVPNService extends VpnService
             if (isUseWeProxy) {
                 executorService.submit(new WebEyeProxyManager(this));
             }
-            executorService.submit(new UDPInput(networkUDPToDeviceQueue, udpSelector));
+            executorService.submit(new UDPInput(networkToDeviceQueue, udpSelector));
             executorService.submit(new UDPOutput(deviceToNetworkUDPQueue, udpSelector, this));
-            executorService.submit(new TCPInput(networkTCPToDeviceQueue, tcpSelector));
-            executorService.submit(new TCPOutput(deviceToNetworkTCPQueue, networkTCPToDeviceQueue, tcpSelector, this));
-            executorService.submit(new VPNRunnable(vpnInterface.getFileDescriptor(),
-                    deviceToNetworkUDPQueue, deviceToNetworkTCPQueue, networkUDPToDeviceQueue, networkTCPToDeviceQueue));
+            executorService.submit(new TCPInput(networkToDeviceQueue, tcpSelector));
+            executorService.submit(new TCPOutput(deviceToNetworkTCPQueue, networkToDeviceQueue, tcpSelector, this));
+
+            executorService.submit(new VPNRunnable(vpnInterface.getFileDescriptor(), deviceToNetworkUDPQueue, deviceToNetworkTCPQueue, networkToDeviceQueue));
+
+            //executorService.submit(new VPNOutput(vpnInterface.getFileDescriptor(), networkToDeviceQueue));
+
             LocalBroadcastManager.getInstance(this).sendBroadcast(new Intent(BROADCAST_VPN_STATE).putExtra("running", true));
             Log.i(TAG, "Started");
-        }
-        catch (IOException e)
-        {
+        } catch (IOException e) {
             // TODO: Here and elsewhere, we should explicitly notify the user of any errors
             // and suggest that they stop the service, since we can't do it ourselves
             Log.e(TAG, "Error starting service", e);
             cleanup();
         }
+
     }
 
-    private void setupVPN()
-    {
-        if (vpnInterface == null)
-        {
+    private void setupVPN() {
+        if (vpnInterface == null) {
             Intent statusActivityIntent = new Intent(this, LocalVPN.class);
             pendingIntent = PendingIntent.getActivity(this, 0, statusActivityIntent, 0);
 
             Builder builder = new Builder();
             builder.addAddress(VPN_ADDRESS, 32);
             builder.addRoute(VPN_ROUTE, 0);
+            //builder.addDnsServer("8.8.8.8");
             vpnInterface = builder.setSession(getString(R.string.app_name)).setConfigureIntent(pendingIntent).establish();
         }
     }
 
     @Override
-    public int onStartCommand(Intent intent, int flags, int startId)
-    {
+    public int onStartCommand(Intent intent, int flags, int startId) {
         return START_STICKY;
     }
 
-    public static boolean isRunning()
-    {
+    public static boolean isRunning() {
         return isRunning;
     }
 
     @Override
-    public void onDestroy()
-    {
+    public void onDestroy() {
         super.onDestroy();
         isRunning = false;
         executorService.shutdownNow();
@@ -144,82 +139,84 @@ public class LocalVPNService extends VpnService
         KLog.i(TAG, "Stopped");
     }
 
-    private void cleanup()
-    {
+    private void cleanup() {
         KLog.i(TAG, "cleanup");
         deviceToNetworkTCPQueue = null;
         deviceToNetworkUDPQueue = null;
-        networkUDPToDeviceQueue = null;
-        networkTCPToDeviceQueue = null;
+        networkToDeviceQueue = null;
         ByteBufferPool.clear();
         closeResources(udpSelector, tcpSelector, vpnInterface);
     }
 
     // TODO: Move this to a "utils" class for reuse
-    private static void closeResources(Closeable... resources)
-    {
-        for (Closeable resource : resources)
-        {
-            try
-            {
+    private static void closeResources(Closeable... resources) {
+        for (Closeable resource : resources) {
+            try {
                 resource.close();
-            }
-            catch (IOException e)
-            {
+            } catch (IOException e) {
                 // Ignore
             }
         }
     }
 
-    public void setWeProxyAvailability(boolean proxyAvailability) { mWeProxyAvailability = proxyAvailability; }
-    public boolean getWeProxyAvailability() { return mWeProxyAvailability; }
+    public void setWeProxyAvailability(boolean proxyAvailability) {
+        mWeProxyAvailability = proxyAvailability;
+    }
 
-    public void setWeProxyHost(String host) { mWeProxyHost = host; }
-    public String getWeProxyHost() { return mWeProxyHost; }
+    public boolean getWeProxyAvailability() {
+        return mWeProxyAvailability;
+    }
 
-    public void setWeProxyPort(int port) { mWeProxyPort = port; }
-    public int getWeProxyPort() { return mWeProxyPort; }
+    public void setWeProxyHost(String host) {
+        mWeProxyHost = host;
+    }
 
-    private static class VPNRunnable implements Runnable
-    {
+    public String getWeProxyHost() {
+        return mWeProxyHost;
+    }
+
+    public void setWeProxyPort(int port) {
+        mWeProxyPort = port;
+    }
+
+    public int getWeProxyPort() {
+        return mWeProxyPort;
+    }
+
+    private static class VPNRunnable implements Runnable {
         private static final String TAG = VPNRunnable.class.getSimpleName();
 
         private FileDescriptor vpnFileDescriptor;
 
         private ConcurrentLinkedQueue<Packet> deviceToNetworkUDPQueue;
         private ConcurrentLinkedQueue<Packet> deviceToNetworkTCPQueue;
-        private ConcurrentLinkedQueue<ByteBuffer> networkUDPToDeviceQueue;
-        private ConcurrentLinkedQueue<ByteBuffer> networkTCPToDeviceQueue;
+        private ConcurrentLinkedQueue<ByteBuffer> networkToDeviceQueue;
 
         public VPNRunnable(FileDescriptor vpnFileDescriptor,
                            ConcurrentLinkedQueue<Packet> deviceToNetworkUDPQueue,
                            ConcurrentLinkedQueue<Packet> deviceToNetworkTCPQueue,
-                           ConcurrentLinkedQueue<ByteBuffer> networkUDPToDeviceQueue,
-                           ConcurrentLinkedQueue<ByteBuffer> networkTCPToDeviceQueue)
-        {
+                           ConcurrentLinkedQueue<ByteBuffer> networkToDeviceQueue) {
             this.vpnFileDescriptor = vpnFileDescriptor;
             this.deviceToNetworkUDPQueue = deviceToNetworkUDPQueue;
             this.deviceToNetworkTCPQueue = deviceToNetworkTCPQueue;
-            this.networkUDPToDeviceQueue = networkUDPToDeviceQueue;
-            this.networkTCPToDeviceQueue = networkTCPToDeviceQueue;
+            this.networkToDeviceQueue = networkToDeviceQueue;
         }
 
         @Override
-        public void run()
-        {
+        public void run() {
             KLog.i(TAG, "Started");
+
 
             FileChannel vpnInput = new FileInputStream(vpnFileDescriptor).getChannel();
             FileChannel vpnOutput = new FileOutputStream(vpnFileDescriptor).getChannel();
 
-            try
-            {
+            try {
                 ByteBuffer bufferToNetwork = null;
+                ByteBuffer bufferFromNetwork;
                 boolean dataSent = true;
-                boolean dataUDPReceived = false;
-                boolean dataTCPReceived = false;
-                while (!Thread.interrupted())
-                {
+                boolean dataReceived = false;
+
+                while (!Thread.interrupted()) {
                     if (dataSent)
                         bufferToNetwork = ByteBufferPool.acquire();
                     else
@@ -230,94 +227,111 @@ public class LocalVPNService extends VpnService
                     //}
                     // TODO: Block when not connected
                     int readBytes = vpnInput.read(bufferToNetwork);
-                    if (readBytes > 0)
-                    {
+                    if (readBytes > 0) {
                         dataSent = true;
                         bufferToNetwork.flip();
                         Packet packet = new Packet(bufferToNetwork);
 
-                        //KLog.i(TAG, packet.toString());
-
-                        if (packet.isUDP())
-                        {
+                        if (packet.isUDP()) {
                             deviceToNetworkUDPQueue.offer(packet);
-                        }
-                        else if (packet.isTCP())
-                        {
+                        } else if (packet.isTCP()) {
                             deviceToNetworkTCPQueue.offer(packet);
-                        }
-                        else
-                        {
+                        } else {
                             KLog.w(TAG, "Unknown packet = " + packet.ip4Header.toString());
                             dataSent = false;
                         }
-                    }
-                    else
-                    {
+                    } else {
                         dataSent = false;
                     }
+
+                    try {
+                        bufferFromNetwork = networkToDeviceQueue.poll();
+                        if (bufferFromNetwork != null) {
+                            bufferFromNetwork.flip();
+                            //KLog.i(TAG, "networkToDeviceQueue");
+
+                            while (bufferFromNetwork.hasRemaining()) {
+                                vpnOutput.write(bufferFromNetwork);
+                            }
+                            dataReceived = true;
+                            ByteBufferPool.release(bufferFromNetwork);
+                        } else {
+                            dataReceived = false;
+                        }
+                    } catch (IOException e) {
+                        Log.e(TAG, e.toString(), e);
+                    }
+
+                    // TODO: Sleep-looping is not very battery-friendly, consider blocking instead
+                    // Confirm if throughput with ConcurrentQueue is really higher compared to BlockingQueue
+                    if (!dataSent && !dataReceived) {
+                        //KLog.i(TAG, "sleep 10ms");
+                        Thread.sleep(SLEEP_TIME);
+                    }
+                }
+            } catch (InterruptedException e) {
+                KLog.i(TAG, "Stopping");
+            } catch (IOException e) {
+                Log.e(TAG, e.toString(), e);
+            } finally {
+                closeResources(vpnInput, vpnOutput);
+                KLog.i("stopped run");
+            }
+        }
+    }
+
+    private static class VPNOutput implements Runnable {
+        private static final String TAG = VPNOutput.class.getSimpleName();
+
+        private FileDescriptor vpnFileDescriptor;
+        private ConcurrentLinkedQueue<ByteBuffer> networkToDeviceQueue;
+
+        public VPNOutput(FileDescriptor vpnFileDescriptor,
+                         ConcurrentLinkedQueue<ByteBuffer> networkToDeviceQueue) {
+            this.vpnFileDescriptor = vpnFileDescriptor;
+            this.networkToDeviceQueue = networkToDeviceQueue;
+        }
+
+        @Override
+        public void run() {
+            KLog.i(TAG, "Started");
+
+            ByteBuffer bufferFromNetwork;
+            boolean dataReceived = false;
+            FileChannel vpnOutput = new FileOutputStream(vpnFileDescriptor).getChannel();
+
+            try {
+                while (!Thread.interrupted()) {
 
                     //if (!vpnOutput.isOpen()){
                     //    KLog.e(TAG, "vpnOutput is close !!!");
                     //}
 
                     try {
-                        ByteBuffer bufferFromNetwork = networkTCPToDeviceQueue.poll();
-                        if (bufferFromNetwork != null && vpnOutput.isOpen()) {
-                            bufferFromNetwork.flip();
-
-                            //Packet packet = new Packet(bufferFromNetwork);
-                            //KLog.i(TAG, "repo " + packet.toString());
-
-                            while (bufferFromNetwork.hasRemaining()) {
-                                vpnOutput.write(bufferFromNetwork);
-                            }
-                            dataTCPReceived = true;
-                            ByteBufferPool.release(bufferFromNetwork);
-                        } else {
-                            dataTCPReceived = false;
-                        }
-                    }
-                    catch (IOException e) {
-                        Log.e(TAG, e.toString(), e);
-                    }
-
-                    try {
-                        ByteBuffer bufferFromNetwork = networkUDPToDeviceQueue.poll();
-                        if (bufferFromNetwork != null && vpnOutput.isOpen()) {
+                        bufferFromNetwork = networkToDeviceQueue.poll();
+                        if (bufferFromNetwork != null) {
                             bufferFromNetwork.flip();
                             while (bufferFromNetwork.hasRemaining()) {
                                 vpnOutput.write(bufferFromNetwork);
                             }
-                            dataUDPReceived = true;
-
+                            dataReceived = true;
                             ByteBufferPool.release(bufferFromNetwork);
                         } else {
-                            dataUDPReceived = false;
+                            dataReceived = false;
                         }
-                    }
-                    catch (IOException e) {
+                    } catch (IOException e) {
                         Log.e(TAG, e.toString(), e);
                     }
 
-                    // TODO: Sleep-looping is not very battery-friendly, consider blocking instead
-                    // Confirm if throughput with ConcurrentQueue is really higher compared to BlockingQueue
-                    if (!dataSent && !dataUDPReceived && !dataTCPReceived) {
-                        Thread.sleep(10);
+                    if (!dataReceived) {
+                        //KLog.i(TAG, "sleep 10ms");
+                        Thread.sleep(SLEEP_TIME);
                     }
                 }
-            }
-            catch (InterruptedException e)
-            {
+            } catch (InterruptedException e) {
                 KLog.i(TAG, "Stopping");
-            }
-            catch (IOException e)
-            {
-                Log.e(TAG, e.toString(), e);
-            }
-            finally
-            {
-                closeResources(vpnInput, vpnOutput);
+            } finally {
+                closeResources(vpnOutput);
                 KLog.i("stopped run");
             }
         }

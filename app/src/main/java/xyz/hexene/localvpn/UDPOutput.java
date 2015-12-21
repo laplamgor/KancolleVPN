@@ -91,6 +91,7 @@ class UDPOutput implements Runnable
                     try
                     {
                         outputChannel.socket().setReceiveBufferSize(65535);
+                        outputChannel.socket().setSendBufferSize(65535);
                         outputChannel.connect(new InetSocketAddress(destinationAddress, destinationPort));
                     }
                     catch (IOException e)
@@ -134,8 +135,10 @@ class UDPOutput implements Runnable
                         continue;
                     }
                     udb.refreshDataEXTime();
+
+                    udb.writelen += payloadBuffer.position();
                 }
-                KLog.i(TAG, ipAndPort + " writeBytes = " + payloadBuffer.position());
+                //KLog.d(TAG, ipAndPort + " writeBytes = " + payloadBuffer.position());
                 ByteBufferPool.release(payloadBuffer);
             }
         }
@@ -153,7 +156,6 @@ class UDPOutput implements Runnable
             KLog.i("stopped run");
         }
     }
-
 
     private void closeChannel(DatagramChannel channel)
     {

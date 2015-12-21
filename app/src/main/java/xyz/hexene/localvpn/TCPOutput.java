@@ -100,7 +100,7 @@ class TCPOutput implements Runnable {
                 } else if (tcpHeader.isSYN()) {
                     processDuplicateSYN(tcb, tcpHeader, responseBuffer);
                 } else if (tcpHeader.isRST()) {
-                    KLog.i(TAG, tcb.ipAndPort + " isRST");
+                    KLog.i(TAG, tcb.ipAndPort + " isRST" + " st = " + tcb.status + " readLen = " + tcb.readlen);
                     //closeCleanly(tcb, responseBuffer);
                     TCB.closeTCB(tcb);
                 } else if (tcpHeader.isFIN()) {
@@ -141,8 +141,10 @@ class TCPOutput implements Runnable {
             TCB.putTCB(ipAndPort, tcb);
 
             try {
+                outputChannel.socket().setReceiveBufferSize(65535);
+                outputChannel.socket().setSendBufferSize(65535);
                 if (destinationPort == 80 && vpnService.getWeProxyAvailability()) {
-                    KLog.i(TAG, ipAndPort + " use proxy " + vpnService.getWeProxyHost() + ":" + vpnService.getWeProxyPort());
+                    KLog.d(TAG, ipAndPort + " use proxy " + vpnService.getWeProxyHost() + ":" + vpnService.getWeProxyPort());
                     outputChannel.connect(new InetSocketAddress(vpnService.getWeProxyHost(), vpnService.getWeProxyPort()));
                 } else {
                     outputChannel.connect(new InetSocketAddress(destinationAddress, destinationPort));
@@ -156,7 +158,7 @@ class TCPOutput implements Runnable {
                 KLog.e(TAG, ipAndPort + " Connection error: " + e.toString());
                 currentPacket.updateTCPBuffer(responseBuffer, (byte) TCPHeader.RST, 0, tcb.myAcknowledgementNum, 0);
 
-                KLog.w(TAG, ipAndPort + " TCP networkToDeviceQueue RST");
+                KLog.w(TAG, ipAndPort + " Connection netToDevice RST");
                 outputQueue.offer(responseBuffer);
                 TCB.closeTCB(tcb);//maybe change zhangjie 2015.12.8
                 //return;
@@ -166,7 +168,7 @@ class TCPOutput implements Runnable {
             /* zhangjie 2015.12.9
             currentPacket.updateTCPBuffer(responseBuffer, (byte) TCPHeader.RST,
                     0, tcpHeader.sequenceNumber + 1, 0);
-            KLog.w(TAG, ipAndPort + " TCP networkToDeviceQueue RST");
+            KLog.w(TAG, ipAndPort + " TCP netToDevice RST");
             */
             //return;
         }
@@ -189,32 +191,28 @@ class TCPOutput implements Runnable {
             Packet referencePacket = tcb.referencePacket;
             tcb.myAcknowledgementNum = tcpHeader.sequenceNumber + 1;
             tcb.theirAcknowledgementNum = tcpHeader.acknowledgementNumber;
-/*
-            if (false) {
+
+            if (true) {
                 tcb.status = TCBStatus.LAST_ACK;
                 referencePacket.updateTCPBuffer(responseBuffer, (byte) (TCPHeader.FIN | TCPHeader.ACK),
                         tcb.mySequenceNum, tcb.myAcknowledgementNum, 0);
                 tcb.mySequenceNum++; // FIN counts as a byte
-                KLog.i(TAG, tcb.ipAndPort + " FIN networkToDeviceQueue FIN|ACK");
+                KLog.i(TAG, tcb.ipAndPort + " FIN netToDevice FIN|ACK");
                 outputQueue.offer(responseBuffer);
-                TCB.closeTCB(tcb);
                 return;
             }
-*/
-            if (tcb.waitingForNetworkData) {
+
+            if (tcb.waitingForNetworkData && tcb.readlen == 0) {
                 tcb.status = TCBStatus.CLOSE_WAIT;
                 referencePacket.updateTCPBuffer(responseBuffer, (byte) TCPHeader.ACK,
                         tcb.mySequenceNum, tcb.myAcknowledgementNum, 0);
-                KLog.i(TAG, tcb.ipAndPort + " FIN networkToDeviceQueue ACK");
+                KLog.d(TAG, tcb.ipAndPort + " FIN netToDevice ACK");
             } else {
                 tcb.status = TCBStatus.LAST_ACK;
                 referencePacket.updateTCPBuffer(responseBuffer, (byte) (TCPHeader.FIN | TCPHeader.ACK),
                         tcb.mySequenceNum, tcb.myAcknowledgementNum, 0);
                 tcb.mySequenceNum++; // FIN counts as a byte
-                KLog.i(TAG, tcb.ipAndPort + " FIN networkToDeviceQueue FIN|ACK");
-                //outputQueue.offer(responseBuffer);
-                //TCB.closeTCB(tcb);
-                //return;
+                KLog.d(TAG, tcb.ipAndPort + " FIN netToDevice FIN|ACK");
             }
         }
 
@@ -227,17 +225,18 @@ class TCPOutput implements Runnable {
         synchronized (tcb) {
             SocketChannel outputChannel = tcb.channel;
 
-            KLog.i(TAG, tcb.ipAndPort + " ACK status = " + tcb.status + "; payloadSize = " + payloadSize);
+            //KLog.d(TAG, tcb.ipAndPort + " ACK st = " + tcb.status + "; payloadSize = " + payloadSize);
 
             if (tcb.status == TCBStatus.SYN_RECEIVED) {
                 tcb.status = TCBStatus.ESTABLISHED;
 
-                selector.wakeup();
+                //selector.wakeup();
                 //tcb.selectionKey = outputChannel.register(selector, SelectionKey.OP_READ, tcb);
                 tcb.waitingForNetworkData = true;
             } else if (tcb.status == TCBStatus.LAST_ACK) {
                 //closeCleanly(tcb, responseBuffer);
                 TCB.closeTCB(tcb);
+                KLog.d(TAG, tcb.ipAndPort + " ACK closeTCB st = " + tcb.status + " payloadSize = " + payloadSize);
                 return;
             }
 
@@ -246,14 +245,18 @@ class TCPOutput implements Runnable {
             }
 
             if (!tcb.waitingForNetworkData) {
-                //KLog.i(TAG, "status = " + tcb.status);
-                selector.wakeup();
+                //KLog.d(TAG, "st = " + tcb.status);
+                //selector.wakeup();
                 tcb.selectionKey.interestOps(SelectionKey.OP_READ);
                 tcb.waitingForNetworkData = true;
             }
 
-            //selector.wakeup();
-
+            selector.wakeup();
+/*
+            if (payloadSize == 0) {
+                return; // Empty ACK, ignore
+            }
+*/
             // Forward to remote server
             try {
                 while (payloadBuffer.hasRemaining()) {
@@ -262,7 +265,6 @@ class TCPOutput implements Runnable {
             } catch (IOException e) {
                 KLog.e(TAG, tcb.ipAndPort + " Network write error: " + e.toString());
                 sendRST(tcb, payloadSize, responseBuffer);
-                //closeCleanly(tcb, responseBuffer);//zhangjie add 2015.12.9
                 return;
             }
 
@@ -271,7 +273,8 @@ class TCPOutput implements Runnable {
             tcb.theirAcknowledgementNum = tcpHeader.acknowledgementNumber;
             Packet referencePacket = tcb.referencePacket;
             referencePacket.updateTCPBuffer(responseBuffer, (byte) TCPHeader.ACK, tcb.mySequenceNum, tcb.myAcknowledgementNum, 0);
-            KLog.i(TAG, tcb.ipAndPort + " TCP networkToDeviceQueue ACK");
+            //KLog.d(TAG, tcb.ipAndPort + " TCP netToDevice ACK");
+            KLog.d(TAG, tcb.ipAndPort + " ACK netToDevice ACK st = " + tcb.status + " payload = " + payloadSize);
         }
 
         outputQueue.offer(responseBuffer);
@@ -281,7 +284,7 @@ class TCPOutput implements Runnable {
         synchronized (tcb) {
             tcb.referencePacket.updateTCPBuffer(buffer, (byte) TCPHeader.RST, 0, tcb.myAcknowledgementNum + prevPayloadSize, 0);
 
-            KLog.i(TAG, tcb.ipAndPort + " TCP networkToDeviceQueue RST");
+            KLog.d(TAG, tcb.ipAndPort + " RST netToDevice RST");
 
             outputQueue.offer(buffer);
             TCB.closeTCB(tcb);

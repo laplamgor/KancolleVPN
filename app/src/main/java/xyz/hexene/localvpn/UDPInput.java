@@ -88,9 +88,11 @@ class UDPInput implements Runnable
                             Packet referencePacket = udb.referencePacket;
                             referencePacket.updateUDPBuffer(receiveBuffer, readBytes);
                             receiveBuffer.position(HEADER_SIZE + readBytes);
+
+                            udb.readlen += readBytes;
                         }
 
-                        KLog.i(TAG, udb.ipAndPort + " networkToDeviceQueue UDP readBytes = " + readBytes);
+                       //KLog.d(TAG, udb.ipAndPort + " networkToDeviceQueue UDP readBytes = " + readBytes);
                         outputQueue.offer(receiveBuffer);
                     }
                 }

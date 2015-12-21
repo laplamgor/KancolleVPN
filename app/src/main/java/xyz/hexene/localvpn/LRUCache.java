@@ -37,7 +37,7 @@ class LRUCache<K, V> extends LinkedHashMap<K, V>
     protected boolean removeEldestEntry(Entry<K, V> eldest)
     {
         if (callback.canCleanup(eldest)) {
-            KLog.i("removeEldestEntry = " + eldest.getKey());
+            //KLog.i("removeEldestEntry = " + eldest.getKey());
 
             callback.cleanup(eldest);
             return true;

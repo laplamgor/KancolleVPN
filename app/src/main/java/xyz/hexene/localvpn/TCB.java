@@ -36,6 +36,7 @@ public class TCB
     public TCBStatus status;
     private long lastDataExTime;
     public long readDataTime;
+    public long readlen;
 
     // TCP has more states, but we need only these
     public enum TCBStatus
@@ -62,7 +63,7 @@ public class TCB
                 @Override
                 public void cleanup(Map.Entry<String, TCB> eldest)
                 {
-                    KLog.i("cleanup = " + eldest.getKey());
+                    KLog.d("cleanup = " + eldest.getKey() + " st = " + eldest.getValue().status + " readLen = " + eldest.getValue().readlen);
                     eldest.getValue().closeChannel();
                 }
 
@@ -73,12 +74,12 @@ public class TCB
 
                     if (status == TCBStatus.CLOSE_WAIT || status == TCBStatus.LAST_ACK){
                         ret = true;
-                        KLog.i(eldest.getKey() + " canCleanup status = " + status);
+                        KLog.d(eldest.getKey() + " canCleanup st = " + status);
                     }
                     else if (System.currentTimeMillis() - eldest.getValue().lastDataExTime > MAX_WAIT_ACK_TIME){
                         //zhangjie add 2015.12.10
                         ret = true;
-                        KLog.i(eldest.getKey() + " canCleanup lastDataExTime > " + MAX_WAIT_ACK_TIME);
+                        KLog.d(eldest.getKey() + " canCleanup lastDataExTime > " + MAX_WAIT_ACK_TIME);
                     }
 
                     return ret;
@@ -89,7 +90,7 @@ public class TCB
     {
         synchronized (tcbCache)
         {
-            //KLog.i("key = " + ipAndPort);
+            //KLog.d("key = " + ipAndPort);
             return tcbCache.get(ipAndPort);
         }
     }
@@ -98,7 +99,7 @@ public class TCB
     {
         synchronized (tcbCache)
         {
-            KLog.i("key = " + ipAndPort);
+            KLog.d("key = " + ipAndPort);
             tcbCache.put(ipAndPort, tcb);
         }
     }
@@ -120,7 +121,7 @@ public class TCB
 
     public static void closeTCB(TCB tcb)
     {
-        KLog.i("key = " + tcb.ipAndPort + " status = " + tcb.status);
+        KLog.d("key = " + tcb.ipAndPort + " st = " + tcb.status + " readLen = " + tcb.readlen);
         tcb.closeChannel();
         synchronized (tcbCache)
         {
@@ -130,7 +131,7 @@ public class TCB
 
     public static void closeAll()
     {
-        KLog.i("closeAll");
+        KLog.d("closeAll");
         synchronized (tcbCache)
         {
             int index = 0;
@@ -138,7 +139,7 @@ public class TCB
             while (it.hasNext())
             {
                 Map.Entry<String, TCB> item = it.next();
-                KLog.i("close " + ++index +": "+ item.getKey() + " status = " + item.getValue().status);
+                KLog.d("close " + ++index +": "+ item.getKey() + " st = " + item.getValue().status + " readLen = " + item.getValue().readlen);
                 item.getValue().closeChannel();
                 it.remove();
             }

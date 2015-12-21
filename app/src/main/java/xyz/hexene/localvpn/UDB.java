@@ -34,6 +34,8 @@ public class UDB {
     public Packet referencePacket;
 
     private long lastDataExTime;
+    public long readlen;
+    public long writelen;
 
     private static final int MAX_CACHE_SIZE = 500;
     private static final long MAX_WAIT_DATA_TIME = 60 * 1000;
@@ -42,7 +44,7 @@ public class UDB {
             new LRUCache<>(MAX_CACHE_SIZE, new LRUCache.CleanupCallback<String, UDB>() {
                 @Override
                 public void cleanup(Map.Entry<String, UDB> eldest) {
-                    KLog.i("cleanup = " + eldest.getKey());
+                    KLog.d("cleanup = " + eldest.getKey() + " readLen = " + eldest.getValue().readlen + " writelen = " + eldest.getValue().writelen);
                     eldest.getValue().closeChannel();
                 }
 
@@ -50,7 +52,7 @@ public class UDB {
                     boolean ret = false;
                     if (System.currentTimeMillis() - eldest.getValue().lastDataExTime > MAX_WAIT_DATA_TIME) {
                         ret = true;
-                        KLog.i(eldest.getKey() + " canCleanup lastDataExTime > " + MAX_WAIT_DATA_TIME);
+                        KLog.d(eldest.getKey() + " canCleanup lastDataExTime > " + MAX_WAIT_DATA_TIME);
                     }
 
                     return ret;
@@ -59,14 +61,14 @@ public class UDB {
 
     public static UDB getUDB(String ipAndPort) {
         synchronized (udbCache) {
-            //KLog.i("key = " + ipAndPort);
+            //KLog.d("key = " + ipAndPort);
             return udbCache.get(ipAndPort);
         }
     }
 
     public static void putUDB(String ipAndPort, UDB udb) {
         synchronized (udbCache) {
-            KLog.i("key = " + ipAndPort);
+            KLog.d("key = " + ipAndPort);
             udbCache.put(ipAndPort, udb);
         }
     }
@@ -80,7 +82,7 @@ public class UDB {
     }
 
     public static void closeUDB(UDB udb) {
-        KLog.i("key = " + udb.ipAndPort);
+        KLog.d("key = " + udb.ipAndPort + " readLen = " + udb.readlen + " writelen = " + udb.writelen);
         udb.closeChannel();
         synchronized (udbCache) {
             udbCache.remove(udb.ipAndPort);
@@ -88,13 +90,13 @@ public class UDB {
     }
 
     public static void closeAll() {
-        KLog.i("closeAll");
+        KLog.d("closeAll");
         synchronized (udbCache) {
             int index = 0;
             Iterator<Map.Entry<String, UDB>> it = udbCache.entrySet().iterator();
             while (it.hasNext()) {
                 Map.Entry<String, UDB> item = it.next();
-                KLog.i("close " + ++index +": " + item.getKey());
+                KLog.d("close " + ++index +": " + item.getKey() + " readLen = " + item.getValue().readlen + " writelen = " + item.getValue().writelen);
                 item.getValue().closeChannel();
                 it.remove();
             }
