@@ -5,7 +5,7 @@ package xyz.hexene.localvpn;
  */
 
 import com.socks.library.KLog;
-//import com.webeye.android.weproxy.WeProxyManager;
+import com.webeye.android.weproxy.AdblockWeProxyManager;
 
 
 class WebEyeProxyManager implements Runnable {
@@ -15,57 +15,41 @@ class WebEyeProxyManager implements Runnable {
     public WebEyeProxyManager(LocalVPNService vpnService) {
         this.vpnService = vpnService;
         //for test
+        /*
         vpnService.setWeProxyAvailability(true);
         vpnService.setWeProxyHost("120.25.148.196");
         vpnService.setWeProxyPort(443);
+        */
     }
 
-
-    /**
-     * WebEyeProxyManager
-     * Call from Application.onTerminate(), which is not guaranteed to ever be called.
-     */
-    private void onTerminate() {
-        vpnService.setWeProxyAvailability(false);
-        //WeProxyManager.getInstance().enableWebeyeProxy(false);
-    }
-
-    /*
-        // Webeye proxy changed listener.
-        private WeProxyManager.WebeyeProxyAvailabilityChangedListener mWeProxyChangedListener =
-                new WeProxyManager.WebeyeProxyAvailabilityChangedListener() {
-
-                    @Override
-                    public void onAvailabilityChanged(boolean enabled, String host, int port) {
-                        KLog.d(TAG, "onAvailabilityChanged, enabled: " + enabled + ", host:" + host + ", port:" + port);
-
-                        vpnService.setWeProxyAvailability(enabled);
-
-                        if (enabled) {
-                            vpnService.setWeProxyHost(host);
-                            vpnService.setWeProxyPort(port);
-                        }
-                    }
-                };
-    */
     @Override
     public void run() {
         KLog.i(TAG, "Started");
         try {
             // Init webeye proxy
-            //WeProxyManager.getInstance().init(vpnService, true, mWeProxyChangedListener, null);
-            //WeProxyManager.getInstance().enableWebeyeProxy(true);
+            AdblockWeProxyManager.getInstance().init(vpnService, true, new AdblockWeProxyManager.ChangeProxyListener() {
+                @Override
+                public void onChangeProxy(String host, int port) {
+                    KLog.d(TAG, "onChangeProxy " + host + ":" + port);
+                    //vpnService.setWeProxyAvailability(true);
+                    vpnService.setWeProxyHost(host);
+                    vpnService.setWeProxyPort(port);
+                }
+            }, new AdblockWeProxyManager.HitADBRuleListener() {
+                @Override
+                public void onHitRule(String host) {
+
+                }
+            });
 
             Thread currentThread = Thread.currentThread();
             while (!currentThread.isInterrupted()) {
-                Thread.sleep(1000);
+                Thread.sleep(20*1000);
             }
         } catch (InterruptedException e) {
             KLog.w(TAG, "Stopping");
         } finally {
-            onTerminate();
+            KLog.i("stopped run");
         }
-
-        KLog.i("stopped run");
     }
 }

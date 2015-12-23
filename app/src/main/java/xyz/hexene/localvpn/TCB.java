@@ -99,7 +99,7 @@ public class TCB
     {
         synchronized (tcbCache)
         {
-            KLog.d("key = " + ipAndPort);
+            KLog.d(tcbCache.size() + " key = " + ipAndPort);
             tcbCache.put(ipAndPort, tcb);
         }
     }

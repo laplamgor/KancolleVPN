@@ -9,4 +9,12 @@
             android:layout_width="fill_parent"
             android:layout_height="wrap_content"
             android:text="@string/start_vpn" />
+    <Button android:id="@+id/proxy"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/start_proxy"
+        android:layout_below="@+id/vpn"
+        android:layout_alignParentStart="true"
+        android:layout_marginTop="42dp"
+        android:onClick="SetProxy"/>
 </RelativeLayout>

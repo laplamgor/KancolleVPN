@@ -50,8 +50,8 @@ public class LocalVPNService extends VpnService {
     private ParcelFileDescriptor vpnInterface = null;
     private PendingIntent pendingIntent;
 
-    private static final boolean isUseWeProxy = false;
-    private boolean mWeProxyAvailability;
+    private static final boolean isUseWeProxy = true;
+    private static boolean mWeProxyAvailability;
     private String mWeProxyHost;
     private int mWeProxyPort;
 
@@ -94,7 +94,6 @@ public class LocalVPNService extends VpnService {
             executorService.submit(new TCPOutput(deviceToNetworkTCPQueue, networkToDeviceQueue, tcpSelector, this));
 
             executorService.submit(new VPNRunnable(vpnInterface.getFileDescriptor(), deviceToNetworkUDPQueue, deviceToNetworkTCPQueue, networkToDeviceQueue));
-
             //executorService.submit(new VPNOutput(vpnInterface.getFileDescriptor(), networkToDeviceQueue));
 
             LocalBroadcastManager.getInstance(this).sendBroadcast(new Intent(BROADCAST_VPN_STATE).putExtra("running", true));
@@ -105,7 +104,6 @@ public class LocalVPNService extends VpnService {
             Log.e(TAG, "Error starting service", e);
             cleanup();
         }
-
     }
 
     private void setupVPN() {
@@ -115,8 +113,61 @@ public class LocalVPNService extends VpnService {
 
             Builder builder = new Builder();
             builder.addAddress(VPN_ADDRESS, 32);
+
+            for (int i = 1; i < 8; i++) {
+                builder.addRoute(i + ".0.0.0", 8);
+                i += 1;
+            }
+            builder.addRoute("8.0.0.0", 7);
+            for (int i = 9; i < 127; i++) {
+                builder.addRoute(i + ".0.0.0", 8);
+                i += 1;
+            }
+            for (int i = 128; i < 224; i++) {
+                builder.addRoute(i + ".0.0.0", 8);
+                i += 1;
+            }
+      /*
             builder.addRoute(VPN_ROUTE, 0);
+
+            builder.addRoute("1.0.0.0", 8);
+            builder.addRoute("2.0.0.0", 7);
+            builder.addRoute("4.0.0.0", 6);
+            builder.addRoute("8.0.0.0", 7);
+            builder.addRoute("11.0.0.0", 8);
+            builder.addRoute("12.0.0.0", 6);
+            builder.addRoute("16.0.0.0", 4);
+            builder.addRoute("32.0.0.0", 3);
+            builder.addRoute("64.0.0.0", 2);
+            builder.addRoute("139.0.0.0", 8);
+            builder.addRoute("140.0.0.0", 6);
+            builder.addRoute("144.0.0.0", 4);
+            builder.addRoute("160.0.0.0", 5);
+            builder.addRoute("168.0.0.0", 6);
+            builder.addRoute("172.0.0.0", 12);
+            builder.addRoute("172.32.0.0", 11);
+            builder.addRoute("172.64.0.0", 10);
+            builder.addRoute("172.128.0.0", 9);
+            builder.addRoute("173.0.0.0", 8);
+            builder.addRoute("174.0.0.0", 7);
+            builder.addRoute("176.0.0.0", 4);
+            builder.addRoute("192.0.0.0", 9);
+            builder.addRoute("192.128.0.0", 11);
+            builder.addRoute("192.160.0.0", 13);
+            builder.addRoute("192.169.0.0", 16);
+            builder.addRoute("192.170.0.0", 15);
+            builder.addRoute("192.172.0.0", 14);
+            builder.addRoute("192.176.0.0", 12);
+            builder.addRoute("192.192.0.0", 10);
+            builder.addRoute("193.0.0.0", 8);
+
+            for (int i = 194; i < 224; i++) {
+                builder.addRoute(i + ".0.0.0", 8);
+                i += 1;
+            }
+*/
             //builder.addDnsServer("8.8.8.8");
+
             vpnInterface = builder.setSession(getString(R.string.app_name)).setConfigureIntent(pendingIntent).establish();
         }
     }
@@ -159,11 +210,11 @@ public class LocalVPNService extends VpnService {
         }
     }
 
-    public void setWeProxyAvailability(boolean proxyAvailability) {
+    public static void setWeProxyAvailability(boolean proxyAvailability) {
         mWeProxyAvailability = proxyAvailability;
     }
 
-    public boolean getWeProxyAvailability() {
+    public static boolean getWeProxyAvailability() {
         return mWeProxyAvailability;
     }
 
@@ -206,7 +257,6 @@ public class LocalVPNService extends VpnService {
         public void run() {
             KLog.i(TAG, "Started");
 
-
             FileChannel vpnInput = new FileInputStream(vpnFileDescriptor).getChannel();
             FileChannel vpnOutput = new FileOutputStream(vpnFileDescriptor).getChannel();
 
@@ -222,9 +272,6 @@ public class LocalVPNService extends VpnService {
                     else
                         bufferToNetwork.clear();
 
-                    //if (!vpnInput.isOpen()){
-                    //    KLog.e(TAG, "vpnInput is close !!!");
-                    //}
                     // TODO: Block when not connected
                     int readBytes = vpnInput.read(bufferToNetwork);
                     if (readBytes > 0) {
@@ -265,7 +312,6 @@ public class LocalVPNService extends VpnService {
                     // TODO: Sleep-looping is not very battery-friendly, consider blocking instead
                     // Confirm if throughput with ConcurrentQueue is really higher compared to BlockingQueue
                     if (!dataSent && !dataReceived) {
-                        //KLog.i(TAG, "sleep 10ms");
                         Thread.sleep(SLEEP_TIME);
                     }
                 }
@@ -303,10 +349,6 @@ public class LocalVPNService extends VpnService {
             try {
                 while (!Thread.interrupted()) {
 
-                    //if (!vpnOutput.isOpen()){
-                    //    KLog.e(TAG, "vpnOutput is close !!!");
-                    //}
-
                     try {
                         bufferFromNetwork = networkToDeviceQueue.poll();
                         if (bufferFromNetwork != null) {
@@ -324,7 +366,6 @@ public class LocalVPNService extends VpnService {
                     }
 
                     if (!dataReceived) {
-                        //KLog.i(TAG, "sleep 10ms");
                         Thread.sleep(SLEEP_TIME);
                     }
                 }

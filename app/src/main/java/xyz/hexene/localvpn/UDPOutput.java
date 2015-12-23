@@ -92,7 +92,12 @@ class UDPOutput implements Runnable
                     {
                         outputChannel.socket().setReceiveBufferSize(65535);
                         outputChannel.socket().setSendBufferSize(65535);
-                        outputChannel.connect(new InetSocketAddress(destinationAddress, destinationPort));
+                        if (destinationPort == 80 && vpnService.getWeProxyAvailability()) {
+                            KLog.d(TAG, ipAndPort + " use proxy " + vpnService.getWeProxyHost() + ":" + vpnService.getWeProxyPort());
+                            outputChannel.connect(new InetSocketAddress(vpnService.getWeProxyHost(), vpnService.getWeProxyPort()));
+                        } else {
+                            outputChannel.connect(new InetSocketAddress(destinationAddress, destinationPort));
+                        }
                     }
                     catch (IOException e)
                     {

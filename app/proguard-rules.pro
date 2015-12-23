@@ -15,3 +15,24 @@
 #-keepclassmembers class fqcn.of.javascript.interface.for.webview {
 #   public *;
 #}
+-keep class com.webeye.base.CalledByNative {}
+
+-keepclasseswithmembers class * {
+    @com.webeye.base.CalledByNative *;
+}
+
+-keepclassmembers class * {
+    @com.webeye.base.CalledByNative *;
+}
+
+-keepclasseswithmembers class com.webeye.android.weproxy.** {
+    native <methods>;
+}
+
+-keep class com.webeye.android.weproxy.WeService extends android.app.Service {
+    public void onCreate();
+    public int onStartCommand(android.content.Intent,int,int);
+    public android.os.IBinder onBind(android.content.Intent);
+    public void onDestroy();
+    private static java.lang.String networkProxyInfoCallback();
+}

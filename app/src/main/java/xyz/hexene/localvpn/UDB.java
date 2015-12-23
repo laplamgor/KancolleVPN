@@ -68,7 +68,7 @@ public class UDB {
 
     public static void putUDB(String ipAndPort, UDB udb) {
         synchronized (udbCache) {
-            KLog.d("key = " + ipAndPort);
+            KLog.d(udbCache.size() + " key = " + ipAndPort);
             udbCache.put(ipAndPort, udb);
         }
     }
