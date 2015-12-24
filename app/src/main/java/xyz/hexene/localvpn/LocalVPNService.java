@@ -18,9 +18,11 @@ package xyz.hexene.localvpn;
 
 import android.app.PendingIntent;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.VpnService;
 import android.os.ParcelFileDescriptor;
 import android.support.v4.content.LocalBroadcastManager;
+import android.system.OsConstants;
 import android.util.Log;
 
 import com.socks.library.KLog;
@@ -167,6 +169,12 @@ public class LocalVPNService extends VpnService {
             }
 */
             //builder.addDnsServer("8.8.8.8");
+            //builder.allowFamily(OsConstants.AF_INET);
+            try {
+                builder.addDisallowedApplication("xyz.hexene.localvpn");
+            } catch (PackageManager.NameNotFoundException e) {
+                KLog.e(TAG, e.toString());
+            }
 
             vpnInterface = builder.setSession(getString(R.string.app_name)).setConfigureIntent(pendingIntent).establish();
         }
