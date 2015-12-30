@@ -56,6 +56,7 @@ class TCPOutput implements Runnable {
     @Override
     public void run() {
         KLog.i(TAG, "Started");
+
         try {
             Thread currentThread = Thread.currentThread();
             while (true) {
@@ -63,7 +64,6 @@ class TCPOutput implements Runnable {
                 // TODO: Block when not connected
                 do {
                     currentPacket = inputQueue.poll();
-
                     if (currentPacket != null)
                         break;
                     Thread.sleep(10);
@@ -119,7 +119,7 @@ class TCPOutput implements Runnable {
             }
         } catch (InterruptedException e) {
             KLog.w(TAG, "Stopping");
-        } catch (IOException e) {
+        } catch (Exception e) {
             Log.e(TAG, e.toString(), e);
         } finally {
             TCB.closeAll();
@@ -197,12 +197,12 @@ class TCPOutput implements Runnable {
                 referencePacket.updateTCPBuffer(responseBuffer, (byte) (TCPHeader.FIN | TCPHeader.ACK),
                         tcb.mySequenceNum, tcb.myAcknowledgementNum, 0);
                 tcb.mySequenceNum++; // FIN counts as a byte
-                KLog.i(TAG, tcb.ipAndPort + " FIN netToDevice FIN|ACK");
+                KLog.d(TAG, tcb.ipAndPort + " FIN netToDevice FIN|ACK");
                 outputQueue.offer(responseBuffer);
                 return;
             }
 
-            if (tcb.waitingForNetworkData && tcb.readlen == 0) {
+            if (tcb.waitingForNetworkData/* && tcb.readlen == 0*/) {
                 tcb.status = TCBStatus.CLOSE_WAIT;
                 referencePacket.updateTCPBuffer(responseBuffer, (byte) TCPHeader.ACK,
                         tcb.mySequenceNum, tcb.myAcknowledgementNum, 0);
@@ -225,19 +225,32 @@ class TCPOutput implements Runnable {
         synchronized (tcb) {
             SocketChannel outputChannel = tcb.channel;
 
-            //KLog.d(TAG, tcb.ipAndPort + " ACK st = " + tcb.status + "; payloadSize = " + payloadSize);
+            KLog.d(TAG, tcb.ipAndPort + " st = " + tcb.status + "; waitData = " + tcb.waitingForNetworkData + "; payload = " + payloadSize);
 
-            if (tcb.status == TCBStatus.SYN_RECEIVED) {
-                tcb.status = TCBStatus.ESTABLISHED;
-
-                //selector.wakeup();
-                //tcb.selectionKey = outputChannel.register(selector, SelectionKey.OP_READ, tcb);
-                tcb.waitingForNetworkData = true;
-            } else if (tcb.status == TCBStatus.LAST_ACK) {
-                //closeCleanly(tcb, responseBuffer);
-                TCB.closeTCB(tcb);
-                KLog.d(TAG, tcb.ipAndPort + " ACK closeTCB st = " + tcb.status + " payloadSize = " + payloadSize);
+            switch (tcb.status) {
+                case SYN_SENT:{
+                    //connect还没有成功
+                    sendRST(tcb, payloadSize, responseBuffer);
+                }
                 return;
+
+                case SYN_RECEIVED: {
+                    tcb.status = TCBStatus.ESTABLISHED;
+                    //selector.wakeup();
+                    //tcb.selectionKey = outputChannel.register(selector, SelectionKey.OP_READ, tcb);
+                    tcb.waitingForNetworkData = true;
+                }
+                break;
+
+                case LAST_ACK: {
+                    //closeCleanly(tcb, responseBuffer);
+                    TCB.closeTCB(tcb);
+                    //KLog.d(TAG, tcb.ipAndPort + " ACK closeTCB st = " + tcb.status + " payloadSize = " + payloadSize);
+                }
+                return;
+
+                default:
+                    break;
             }
 
             if (payloadSize == 0) {
@@ -262,7 +275,7 @@ class TCPOutput implements Runnable {
                 while (payloadBuffer.hasRemaining()) {
                     outputChannel.write(payloadBuffer);
                 }
-            } catch (IOException e) {
+            } catch (Exception e) {
                 KLog.e(TAG, tcb.ipAndPort + " Network write error: " + e.toString());
                 sendRST(tcb, payloadSize, responseBuffer);
                 return;
@@ -273,8 +286,7 @@ class TCPOutput implements Runnable {
             tcb.theirAcknowledgementNum = tcpHeader.acknowledgementNumber;
             Packet referencePacket = tcb.referencePacket;
             referencePacket.updateTCPBuffer(responseBuffer, (byte) TCPHeader.ACK, tcb.mySequenceNum, tcb.myAcknowledgementNum, 0);
-            //KLog.d(TAG, tcb.ipAndPort + " TCP netToDevice ACK");
-            KLog.d(TAG, tcb.ipAndPort + " ACK netToDevice ACK st = " + tcb.status + " payload = " + payloadSize);
+            KLog.d(TAG, tcb.ipAndPort + " ACK netToDevice ACK st = " + tcb.status);
         }
 
         outputQueue.offer(responseBuffer);

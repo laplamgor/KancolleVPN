@@ -20,7 +20,6 @@ import com.socks.library.KLog;
 
 import java.io.IOException;
 import java.nio.channels.DatagramChannel;
-import java.nio.channels.SelectionKey;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -29,22 +28,20 @@ import java.util.Map;
  * Transmission Control Block
  */
 public class UDB {
+    private static final int MAX_CACHE_SIZE = 500;
+    private static final long MAX_WAIT_DATA_TIME = 60 * 1000;
     public String ipAndPort;
     public DatagramChannel channel;
     public Packet referencePacket;
-
-    private long lastDataExTime;
     public long readlen;
     public long writelen;
-
-    private static final int MAX_CACHE_SIZE = 500;
-    private static final long MAX_WAIT_DATA_TIME = 60 * 1000;
-
+    public int curNum;
+    private long lastDataExTime;
     private static LRUCache<String, UDB> udbCache =
             new LRUCache<>(MAX_CACHE_SIZE, new LRUCache.CleanupCallback<String, UDB>() {
                 @Override
                 public void cleanup(Map.Entry<String, UDB> eldest) {
-                    KLog.d("cleanup = " + eldest.getKey() + " readLen = " + eldest.getValue().readlen + " writelen = " + eldest.getValue().writelen);
+                    KLog.d(eldest.getValue().curNum + " cleanup = " + eldest.getKey() + " readLen = " + eldest.getValue().readlen + " writelen = " + eldest.getValue().writelen);
                     eldest.getValue().closeChannel();
                 }
 
@@ -59,6 +56,14 @@ public class UDB {
                 }
             });
 
+    public UDB(String ipAndPort, DatagramChannel channel, Packet referencePacket) {
+        this.ipAndPort = ipAndPort;
+        this.channel = channel;
+        this.referencePacket = referencePacket;
+
+        this.lastDataExTime = System.currentTimeMillis();
+    }
+
     public static UDB getUDB(String ipAndPort) {
         synchronized (udbCache) {
             //KLog.d("key = " + ipAndPort);
@@ -68,21 +73,14 @@ public class UDB {
 
     public static void putUDB(String ipAndPort, UDB udb) {
         synchronized (udbCache) {
+            udb.curNum = udbCache.size();
             KLog.d(udbCache.size() + " key = " + ipAndPort);
             udbCache.put(ipAndPort, udb);
         }
     }
 
-    public UDB(String ipAndPort, DatagramChannel channel, Packet referencePacket) {
-        this.ipAndPort = ipAndPort;
-        this.channel = channel;
-        this.referencePacket = referencePacket;
-
-        this.lastDataExTime = System.currentTimeMillis();
-    }
-
     public static void closeUDB(UDB udb) {
-        KLog.d("key = " + udb.ipAndPort + " readLen = " + udb.readlen + " writelen = " + udb.writelen);
+        KLog.d(udb.curNum + " key = " + udb.ipAndPort + " readLen = " + udb.readlen + " writelen = " + udb.writelen);
         udb.closeChannel();
         synchronized (udbCache) {
             udbCache.remove(udb.ipAndPort);
@@ -96,7 +94,7 @@ public class UDB {
             Iterator<Map.Entry<String, UDB>> it = udbCache.entrySet().iterator();
             while (it.hasNext()) {
                 Map.Entry<String, UDB> item = it.next();
-                KLog.d("close " + ++index +": " + item.getKey() + " readLen = " + item.getValue().readlen + " writelen = " + item.getValue().writelen);
+                KLog.d("close " + ++index + ": " + item.getKey() + " readLen = " + item.getValue().readlen + " writelen = " + item.getValue().writelen);
                 item.getValue().closeChannel();
                 it.remove();
             }

@@ -31,30 +31,25 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 import xyz.hexene.localvpn.TCB.TCBStatus;
 
-class TCPInput implements Runnable
-{
+class TCPInput implements Runnable {
     private static final String TAG = TCPInput.class.getSimpleName();
     private static final int HEADER_SIZE = Packet.IP4_HEADER_SIZE + Packet.TCP_HEADER_SIZE;
 
     private ConcurrentLinkedQueue<ByteBuffer> outputQueue;
     private Selector selector;
 
-    public TCPInput(ConcurrentLinkedQueue<ByteBuffer> outputQueue, Selector selector)
-    {
+    public TCPInput(ConcurrentLinkedQueue<ByteBuffer> outputQueue, Selector selector) {
         this.outputQueue = outputQueue;
         this.selector = selector;
     }
 
     @Override
-    public void run()
-    {
-        try
-        {
-            KLog.d(TAG, "Started");
-            while (!Thread.interrupted())
-            {
-                int readyChannels = selector.select();
+    public void run() {
+        KLog.i(TAG, "Started");
 
+        try {
+            while (!Thread.interrupted()) {
+                int readyChannels = selector.select();
                 if (readyChannels == 0) {
                     Thread.sleep(10);
                     continue;
@@ -64,11 +59,9 @@ class TCPInput implements Runnable
                 Set<SelectionKey> keys = selector.selectedKeys();
                 Iterator<SelectionKey> keyIterator = keys.iterator();
 
-                while (keyIterator.hasNext() && !Thread.interrupted())
-                {
+                while (keyIterator.hasNext() && !Thread.interrupted()) {
                     SelectionKey key = keyIterator.next();
-                    if (key.isValid())
-                    {
+                    if (key.isValid()) {
                         if (key.isConnectable())
                             processConnect(key, keyIterator);
                         else if (key.isReadable())
@@ -78,22 +71,16 @@ class TCPInput implements Runnable
                     }
                 }
             }
-        }
-        catch (InterruptedException e)
-        {
+        } catch (InterruptedException e) {
             KLog.w(TAG, "Stopping!!!");
-        }
-        catch (IOException e)
-        {
+        } catch (Exception e) {
             Log.e(TAG, e.toString(), e);
-        }
-        finally {
+        } finally {
             KLog.i("stopped run");
         }
     }
 
-    private void processConnect(SelectionKey key, Iterator<SelectionKey> keyIterator)
-    {
+    private void processConnect(SelectionKey key, Iterator<SelectionKey> keyIterator) {
         TCB tcb = (TCB) key.attachment();
         synchronized (tcb) {
 
@@ -134,8 +121,7 @@ class TCPInput implements Runnable
         }
     }
 
-    private void processInput(SelectionKey key, Iterator<SelectionKey> keyIterator)
-    {
+    private void processInput(SelectionKey key, Iterator<SelectionKey> keyIterator) {
         keyIterator.remove();
 
         ByteBuffer receiveBuffer = ByteBufferPool.acquire();
@@ -143,8 +129,7 @@ class TCPInput implements Runnable
         receiveBuffer.position(HEADER_SIZE);
 
         TCB tcb = (TCB) key.attachment();
-        synchronized (tcb)
-        {
+        synchronized (tcb) {
             //KLog.d(TAG, tcb.ipAndPort + " st = " + tcb.status);
 
             //zhangjie add 2015.12.11
@@ -153,18 +138,15 @@ class TCPInput implements Runnable
             Packet referencePacket = tcb.referencePacket;
             SocketChannel inputChannel = (SocketChannel) key.channel();
             int readBytes;
-            try
-            {
+            try {
                 readBytes = inputChannel.read(receiveBuffer);
-            }
-            catch (IOException e)
-            {
+            } catch (IOException e) {
                 KLog.e(TAG, tcb.ipAndPort + " Network read error: " + e.toString());
 
-                if(tcb.status == TCBStatus.CLOSE_WAIT || tcb.status == TCBStatus.LAST_ACK){
+                if (tcb.status == TCBStatus.CLOSE_WAIT || tcb.status == TCBStatus.LAST_ACK) {
                     KLog.w(TAG, tcb.ipAndPort + " closeTCB st = " + tcb.status);
                     ByteBufferPool.release(receiveBuffer);
-                }else {
+                } else {
                     referencePacket.updateTCPBuffer(receiveBuffer, (byte) Packet.TCPHeader.RST, 0, tcb.myAcknowledgementNum, 0);
                     KLog.w(TAG, tcb.ipAndPort + " TCP netToDevice RST");
                     outputQueue.offer(receiveBuffer);
@@ -174,20 +156,17 @@ class TCPInput implements Runnable
                 return;
             }
 
-            if (readBytes == -1)
-            {
+            if (readBytes == -1) {
                 // End of stream, stop waiting until we push more data
                 key.interestOps(0);
                 tcb.waitingForNetworkData = false;
 
-                if (tcb.status != TCBStatus.CLOSE_WAIT)
-                {
-                    if ((tcb.readDataTime > 0) && (System.currentTimeMillis() - tcb.readDataTime > 30*1000)) {
+                if (tcb.status != TCBStatus.CLOSE_WAIT) {
+                    if ((tcb.readDataTime > 0) && (System.currentTimeMillis() - tcb.readDataTime > 30 * 1000)) {
                         KLog.d(TAG, tcb.ipAndPort + " st = " + tcb.status + " readDataTime > 30*1000");
                         TCB.closeTCB(tcb);
                         return;
-                    }
-                    else {
+                    } else {
                         KLog.d(TAG, tcb.ipAndPort + " st = " + tcb.status + " release receiveBuffer");
                         ByteBufferPool.release(receiveBuffer);
                         return;
@@ -198,9 +177,7 @@ class TCPInput implements Runnable
                 referencePacket.updateTCPBuffer(receiveBuffer, (byte) Packet.TCPHeader.FIN, tcb.mySequenceNum, tcb.myAcknowledgementNum, 0);
                 tcb.mySequenceNum++; // FIN counts as a byte
                 KLog.d(TAG, tcb.ipAndPort + " TCP netToDevice FIN");
-            }
-            else
-            {
+            } else {
                 tcb.readDataTime = System.currentTimeMillis();
                 tcb.readlen += readBytes;
 
@@ -210,7 +187,7 @@ class TCPInput implements Runnable
                 tcb.mySequenceNum += readBytes; // Next sequence number
                 receiveBuffer.position(HEADER_SIZE + readBytes);
 
-                //KLog.d(TAG, tcb.ipAndPort + " TCP netToDevice PSH|ACK readBytes = " + readBytes);
+                KLog.d(TAG, tcb.ipAndPort + " TCP netToDevice PSH|ACK readBytes = " + readBytes);
             }
         }
 

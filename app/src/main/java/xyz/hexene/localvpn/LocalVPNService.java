@@ -17,11 +17,14 @@
 package xyz.hexene.localvpn;
 
 import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.net.VpnService;
+import android.os.Build;
 import android.os.ParcelFileDescriptor;
-import android.support.v4.content.LocalBroadcastManager;
 import android.system.OsConstants;
 import android.util.Log;
 
@@ -40,34 +43,84 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class LocalVPNService extends VpnService {
+    public static final String ACTION_VPN_RUNNING = "com.webeye.adbapp.vpn.VPN_STATE";
+    public static final String ACTION_PROXY_CHANGED = "com.webeye.adbapp.vpn.PROXY_CHANGED";
+    public static final String ACTION_CLOSE_VPN = "com.webeye.adbapp.vpn.CLOSE_VPN";
+
+    public static final String EXTRA_PROXY_STATE = "proxy_state";
+    public static final String EXTRA_PROXY_HOST = "proxy_host";
+    public static final String EXTRA_PROXY_PORT = "proxy_port";
     private static final String TAG = LocalVPNService.class.getSimpleName();
     private static final String VPN_ADDRESS = "10.0.0.2"; // Only IPv4 support for now
     private static final String VPN_ROUTE = "0.0.0.0"; // Intercept everything
+    private static final boolean isUseWeProxy = true;
     private static int SLEEP_TIME = 10;
-
-    public static final String BROADCAST_VPN_STATE = "xyz.hexene.localvpn.VPN_STATE";
-
     private static boolean isRunning = false;
-
+    private static boolean mWeProxyAvailability;
     private ParcelFileDescriptor vpnInterface = null;
     private PendingIntent pendingIntent;
-
-    private static final boolean isUseWeProxy = true;
-    private static boolean mWeProxyAvailability;
     private String mWeProxyHost;
     private int mWeProxyPort;
+
+    private final BroadcastReceiver mProxyStateListener = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            KLog.d(TAG, intent.getAction());
+            boolean proxyStatus = intent.getBooleanExtra(EXTRA_PROXY_STATE, false);
+            String proxyHost = intent.getStringExtra(EXTRA_PROXY_HOST);
+            int proxyPort = intent.getIntExtra(EXTRA_PROXY_PORT, -1);
+            KLog.d(TAG, "proxy status: " + proxyStatus + " host: " + proxyHost + " port: " + proxyPort);
+            setWeProxyAvailability(proxyStatus);
+            setWeProxyHost(proxyHost);
+            setWeProxyPort(proxyPort);
+        }
+    };
+
+    private final BroadcastReceiver mCloseVpnListener = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            KLog.d(TAG, intent.getAction());
+            isRunning = false;
+            executorService.shutdownNow();
+            cleanup();
+            stopSelf();
+        }
+    };
 
     private ConcurrentLinkedQueue<Packet> deviceToNetworkUDPQueue;
     private ConcurrentLinkedQueue<Packet> deviceToNetworkTCPQueue;
     private ConcurrentLinkedQueue<ByteBuffer> networkToDeviceQueue;
-
     private ExecutorService executorService;
-
     private Selector udpSelector;
     private Selector tcpSelector;
 
+    public static boolean isRunning() {
+        return isRunning;
+    }
+
+    // TODO: Move this to a "utils" class for reuse
+    private static void closeResources(Closeable... resources) {
+        for (Closeable resource : resources) {
+            try {
+                resource.close();
+            } catch (IOException e) {
+                // Ignore
+            }
+        }
+    }
+
+    public static boolean getWeProxyAvailability() {
+        return mWeProxyAvailability;
+    }
+
+    public static void setWeProxyAvailability(boolean proxyAvailability) {
+        mWeProxyAvailability = proxyAvailability;
+    }
+
     @Override
     public void onCreate() {
+        Log.i(TAG, "onCreate");
+
         super.onCreate();
         isRunning = true;
         setupVPN();
@@ -79,7 +132,7 @@ public class LocalVPNService extends VpnService {
             deviceToNetworkTCPQueue = new ConcurrentLinkedQueue<>();
             networkToDeviceQueue = new ConcurrentLinkedQueue<>();
 
-            int nThreads = 5;
+            int nThreads = 6;
             // TODO: 15-12-15 use weproxy config
             if (isUseWeProxy) {
                 nThreads++;
@@ -96,10 +149,10 @@ public class LocalVPNService extends VpnService {
             executorService.submit(new TCPOutput(deviceToNetworkTCPQueue, networkToDeviceQueue, tcpSelector, this));
 
             executorService.submit(new VPNRunnable(vpnInterface.getFileDescriptor(), deviceToNetworkUDPQueue, deviceToNetworkTCPQueue, networkToDeviceQueue));
-            //executorService.submit(new VPNOutput(vpnInterface.getFileDescriptor(), networkToDeviceQueue));
+            executorService.submit(new VPNOutput(vpnInterface.getFileDescriptor(), networkToDeviceQueue));
 
-            LocalBroadcastManager.getInstance(this).sendBroadcast(new Intent(BROADCAST_VPN_STATE).putExtra("running", true));
-            Log.i(TAG, "Started");
+            sendBroadcast(new Intent(ACTION_VPN_RUNNING).putExtra("running", true));
+            KLog.i(TAG, "sendBroadcast " + ACTION_VPN_RUNNING);
         } catch (IOException e) {
             // TODO: Here and elsewhere, we should explicitly notify the user of any errors
             // and suggest that they stop the service, since we can't do it ourselves
@@ -162,21 +215,32 @@ public class LocalVPNService extends VpnService {
             builder.addRoute("192.176.0.0", 12);
             builder.addRoute("192.192.0.0", 10);
             builder.addRoute("193.0.0.0", 8);
-
             for (int i = 194; i < 224; i++) {
                 builder.addRoute(i + ".0.0.0", 8);
                 i += 1;
             }
 */
             //builder.addDnsServer("8.8.8.8");
-            //builder.allowFamily(OsConstants.AF_INET);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                KLog.i(TAG, "allowFamily AF_INET");
+                builder.allowFamily(OsConstants.AF_INET);
+            }
             try {
-                builder.addDisallowedApplication("xyz.hexene.localvpn");
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    String selfPackage = getPackageName();
+                    KLog.d("filter package: " + selfPackage);
+                    builder.addDisallowedApplication(selfPackage);
+                }
             } catch (PackageManager.NameNotFoundException e) {
                 KLog.e(TAG, e.toString());
             }
 
-            vpnInterface = builder.setSession(getString(R.string.app_name)).setConfigureIntent(pendingIntent).establish();
+            vpnInterface = builder.setSession(getApplicationInfo().name).setConfigureIntent(pendingIntent).establish();
+
+            IntentFilter filter = new IntentFilter(ACTION_PROXY_CHANGED);
+            registerReceiver(this.mProxyStateListener, filter);
+            filter = new IntentFilter(ACTION_CLOSE_VPN);
+            registerReceiver(this.mCloseVpnListener, filter);
         }
     }
 
@@ -185,16 +249,15 @@ public class LocalVPNService extends VpnService {
         return START_STICKY;
     }
 
-    public static boolean isRunning() {
-        return isRunning;
-    }
-
     @Override
     public void onDestroy() {
+        KLog.i(TAG, "onDestroy");
         super.onDestroy();
         isRunning = false;
         executorService.shutdownNow();
         cleanup();
+        unregisterReceiver(mProxyStateListener);
+        unregisterReceiver(mCloseVpnListener);
         KLog.i(TAG, "Stopped");
     }
 
@@ -207,39 +270,20 @@ public class LocalVPNService extends VpnService {
         closeResources(udpSelector, tcpSelector, vpnInterface);
     }
 
-    // TODO: Move this to a "utils" class for reuse
-    private static void closeResources(Closeable... resources) {
-        for (Closeable resource : resources) {
-            try {
-                resource.close();
-            } catch (IOException e) {
-                // Ignore
-            }
-        }
-    }
-
-    public static void setWeProxyAvailability(boolean proxyAvailability) {
-        mWeProxyAvailability = proxyAvailability;
-    }
-
-    public static boolean getWeProxyAvailability() {
-        return mWeProxyAvailability;
+    public String getWeProxyHost() {
+        return mWeProxyHost;
     }
 
     public void setWeProxyHost(String host) {
         mWeProxyHost = host;
     }
 
-    public String getWeProxyHost() {
-        return mWeProxyHost;
+    public int getWeProxyPort() {
+        return mWeProxyPort;
     }
 
     public void setWeProxyPort(int port) {
         mWeProxyPort = port;
-    }
-
-    public int getWeProxyPort() {
-        return mWeProxyPort;
     }
 
     private static class VPNRunnable implements Runnable {
@@ -266,7 +310,7 @@ public class LocalVPNService extends VpnService {
             KLog.i(TAG, "Started");
 
             FileChannel vpnInput = new FileInputStream(vpnFileDescriptor).getChannel();
-            FileChannel vpnOutput = new FileOutputStream(vpnFileDescriptor).getChannel();
+            //FileChannel vpnOutput = new FileOutputStream(vpnFileDescriptor).getChannel();
 
             try {
                 ByteBuffer bufferToNetwork = null;
@@ -298,7 +342,7 @@ public class LocalVPNService extends VpnService {
                     } else {
                         dataSent = false;
                     }
-
+/*
                     try {
                         bufferFromNetwork = networkToDeviceQueue.poll();
                         if (bufferFromNetwork != null) {
@@ -316,19 +360,19 @@ public class LocalVPNService extends VpnService {
                     } catch (IOException e) {
                         Log.e(TAG, e.toString(), e);
                     }
-
+*/
                     // TODO: Sleep-looping is not very battery-friendly, consider blocking instead
                     // Confirm if throughput with ConcurrentQueue is really higher compared to BlockingQueue
-                    if (!dataSent && !dataReceived) {
+                    if (!dataSent) {
                         Thread.sleep(SLEEP_TIME);
                     }
                 }
             } catch (InterruptedException e) {
                 KLog.i(TAG, "Stopping");
-            } catch (IOException e) {
+            } catch (Exception e) {
                 Log.e(TAG, e.toString(), e);
             } finally {
-                closeResources(vpnInput, vpnOutput);
+                closeResources(vpnInput);
                 KLog.i("stopped run");
             }
         }
@@ -356,7 +400,6 @@ public class LocalVPNService extends VpnService {
 
             try {
                 while (!Thread.interrupted()) {
-
                     try {
                         bufferFromNetwork = networkToDeviceQueue.poll();
                         if (bufferFromNetwork != null) {
@@ -379,6 +422,8 @@ public class LocalVPNService extends VpnService {
                 }
             } catch (InterruptedException e) {
                 KLog.i(TAG, "Stopping");
+            } catch (Exception e) {
+                Log.e(TAG, e.toString(), e);
             } finally {
                 closeResources(vpnOutput);
                 KLog.i("stopped run");

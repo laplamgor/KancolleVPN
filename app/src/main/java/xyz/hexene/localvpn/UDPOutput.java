@@ -27,42 +27,33 @@ import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
-import java.util.Iterator;
-import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-class UDPOutput implements Runnable
-{
+class UDPOutput implements Runnable {
     private static final String TAG = UDPOutput.class.getSimpleName();
 
     private LocalVPNService vpnService;
     private ConcurrentLinkedQueue<Packet> inputQueue;
     private Selector selector;
 
-    public UDPOutput(ConcurrentLinkedQueue<Packet> inputQueue, Selector selector, LocalVPNService vpnService)
-    {
+    public UDPOutput(ConcurrentLinkedQueue<Packet> inputQueue, Selector selector, LocalVPNService vpnService) {
         this.inputQueue = inputQueue;
         this.selector = selector;
         this.vpnService = vpnService;
     }
 
     @Override
-    public void run()
-    {
+    public void run() {
         KLog.i(TAG, "Started");
-        try
-        {
+        try {
             Packet currentPacket;
             UDB udb;
             DatagramChannel outputChannel;
             Thread currentThread = Thread.currentThread();
-            while (true)
-            {
+            while (true) {
                 // TODO: Block when not connected
-                do
-                {
+                do {
                     currentPacket = inputQueue.poll();
-                    //KLog.i(TAG, "looptest udpoutput");
                     if (currentPacket != null)
                         break;
                     Thread.sleep(10);
@@ -88,26 +79,19 @@ class UDPOutput implements Runnable
                     outputChannel = DatagramChannel.open();
                     vpnService.protect(outputChannel.socket());
 
-                    try
-                    {
+                    try {
                         outputChannel.socket().setReceiveBufferSize(65535);
                         outputChannel.socket().setSendBufferSize(65535);
-                        if (destinationPort == 80 && vpnService.getWeProxyAvailability()) {
-                            KLog.d(TAG, ipAndPort + " use proxy " + vpnService.getWeProxyHost() + ":" + vpnService.getWeProxyPort());
-                            outputChannel.connect(new InetSocketAddress(vpnService.getWeProxyHost(), vpnService.getWeProxyPort()));
-                        } else {
-                            outputChannel.connect(new InetSocketAddress(destinationAddress, destinationPort));
-                        }
-                    }
-                    catch (IOException e)
-                    {
+
+                        outputChannel.connect(new InetSocketAddress(destinationAddress, destinationPort));
+                    } catch (IOException e) {
                         KLog.e(TAG, ipAndPort + " Connection error: " + e.toString());
                         closeChannel(outputChannel);
                         ByteBufferPool.release(payloadBuffer);
                         continue;
                     }
 
-                    if (!outputChannel.isConnected()){
+                    if (!outputChannel.isConnected()) {
                         KLog.e(TAG, ipAndPort + " isConnected fail!!!");
                         closeChannel(outputChannel);
                         ByteBufferPool.release(payloadBuffer);
@@ -124,15 +108,12 @@ class UDPOutput implements Runnable
                     outputChannel.register(selector, SelectionKey.OP_READ, udb);
                 }
 
-                synchronized (udb){
+                synchronized (udb) {
                     outputChannel = udb.channel;
-                    try
-                    {
+                    try {
                         while (payloadBuffer.hasRemaining())
                             outputChannel.write(payloadBuffer);
-                    }
-                    catch (IOException e)
-                    {
+                    } catch (IOException e) {
                         KLog.e(TAG, ipAndPort + " write error: " + e.toString());
 
                         ByteBufferPool.release(payloadBuffer);
@@ -146,31 +127,21 @@ class UDPOutput implements Runnable
                 //KLog.d(TAG, ipAndPort + " writeBytes = " + payloadBuffer.position());
                 ByteBufferPool.release(payloadBuffer);
             }
-        }
-        catch (InterruptedException e)
-        {
+        } catch (InterruptedException e) {
             KLog.w(TAG, e.toString());
-        }
-        catch (IOException e)
-        {
+        } catch (Exception e) {
             Log.e(TAG, e.toString(), e);
-        }
-        finally
-        {
+        } finally {
             UDB.closeAll();
             KLog.i("stopped run");
         }
     }
 
-    private void closeChannel(DatagramChannel channel)
-    {
+    private void closeChannel(DatagramChannel channel) {
         //KLog.i(TAG, "closeChannel");
-        try
-        {
+        try {
             channel.close();
-        }
-        catch (IOException e)
-        {
+        } catch (IOException e) {
             KLog.e(TAG, "closeChannel " + e.toString());
         }
     }

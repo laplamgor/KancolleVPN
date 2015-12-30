@@ -29,30 +29,24 @@ import java.util.Iterator;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-class UDPInput implements Runnable
-{
+class UDPInput implements Runnable {
     private static final String TAG = UDPInput.class.getSimpleName();
     private static final int HEADER_SIZE = Packet.IP4_HEADER_SIZE + Packet.UDP_HEADER_SIZE;
 
     private Selector selector;
     private ConcurrentLinkedQueue<ByteBuffer> outputQueue;
 
-    public UDPInput(ConcurrentLinkedQueue<ByteBuffer> outputQueue, Selector selector)
-    {
+    public UDPInput(ConcurrentLinkedQueue<ByteBuffer> outputQueue, Selector selector) {
         this.outputQueue = outputQueue;
         this.selector = selector;
     }
 
     @Override
-    public void run()
-    {
-        try
-        {
-            KLog.i(TAG, "Started");
-            while (!Thread.interrupted())
-            {
+    public void run() {
+        KLog.i(TAG, "Started");
+        try {
+            while (!Thread.interrupted()) {
                 int readyChannels = selector.select();
-                //KLog.i(TAG, "looptest udpinput readyChannels = " + readyChannels);
                 if (readyChannels == 0) {
                     Thread.sleep(10);
                     continue;
@@ -61,11 +55,9 @@ class UDPInput implements Runnable
                 Set<SelectionKey> keys = selector.selectedKeys();
                 Iterator<SelectionKey> keyIterator = keys.iterator();
 
-                while (keyIterator.hasNext() && !Thread.interrupted())
-                {
+                while (keyIterator.hasNext() && !Thread.interrupted()) {
                     SelectionKey key = keyIterator.next();
-                    if (key.isValid() && key.isReadable())
-                    {
+                    if (key.isValid() && key.isReadable()) {
                         keyIterator.remove();
 
                         ByteBuffer receiveBuffer = ByteBufferPool.acquire();
@@ -75,11 +67,10 @@ class UDPInput implements Runnable
                         int readBytes;
                         DatagramChannel inputChannel = (DatagramChannel) key.channel();
                         UDB udb = (UDB) key.attachment();
-                        synchronized (udb){
+                        synchronized (udb) {
                             try {
                                 readBytes = inputChannel.read(receiveBuffer);
-                            }
-                            catch (IOException e){
+                            } catch (IOException e) {
                                 KLog.e(TAG, udb.ipAndPort + " read error: " + e.toString());
                                 UDB.closeUDB(udb);
                                 continue;
@@ -92,21 +83,16 @@ class UDPInput implements Runnable
                             udb.readlen += readBytes;
                         }
 
-                       //KLog.d(TAG, udb.ipAndPort + " networkToDeviceQueue UDP readBytes = " + readBytes);
+                        //KLog.d(TAG, udb.ipAndPort + " networkToDeviceQueue UDP readBytes = " + readBytes);
                         outputQueue.offer(receiveBuffer);
                     }
                 }
             }
-        }
-        catch (InterruptedException e)
-        {
+        } catch (InterruptedException e) {
             KLog.w(TAG, e.toString());
-        }
-        catch (IOException e)
-        {
+        } catch (Exception e) {
             Log.e(TAG, e.toString(), e);
-        }
-        finally {
+        } finally {
             KLog.i("stopped run");
         }
     }
