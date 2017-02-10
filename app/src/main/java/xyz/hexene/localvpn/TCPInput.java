@@ -168,7 +168,13 @@ class TCPInput implements Runnable {
                         return;
                     } else {
                         KLog.d(TAG, tcb.ipAndPort + " st = " + tcb.status + " release receiveBuffer");
-                        ByteBufferPool.release(receiveBuffer);
+                        //ByteBufferPool.release(receiveBuffer);
+                        //return;
+                        tcb.status = TCBStatus.LAST_ACK;
+                        referencePacket.updateTCPBuffer(receiveBuffer, (byte)( Packet.TCPHeader.FIN | Packet.TCPHeader.ACK), tcb.mySequenceNum, tcb.myAcknowledgementNum, 0);
+                        tcb.mySequenceNum++; // FIN counts as a byte
+                        KLog.d(TAG, tcb.ipAndPort + " TCP netToDevice FIN");
+                        outputQueue.offer(receiveBuffer);
                         return;
                     }
                 }
@@ -186,7 +192,6 @@ class TCPInput implements Runnable {
                         tcb.mySequenceNum, tcb.myAcknowledgementNum, readBytes);
                 tcb.mySequenceNum += readBytes; // Next sequence number
                 receiveBuffer.position(HEADER_SIZE + readBytes);
-
                 KLog.d(TAG, tcb.ipAndPort + " TCP netToDevice PSH|ACK readBytes = " + readBytes);
             }
         }

@@ -130,6 +130,7 @@ class TCPOutput implements Runnable {
     private void initializeConnection(String ipAndPort, InetAddress destinationAddress, int destinationPort,
                                       Packet currentPacket, TCPHeader tcpHeader, ByteBuffer responseBuffer)
             throws IOException {
+        KLog.i("initializeConnection "+tcpHeader.isSYN()+tcpHeader.isRST()+tcpHeader.isFIN()+tcpHeader.isACK());
         currentPacket.swapSourceAndDestination();
         if (tcpHeader.isSYN()) {
             SocketChannel outputChannel = SocketChannel.open();
@@ -188,6 +189,7 @@ class TCPOutput implements Runnable {
 
     private void processFIN(TCB tcb, TCPHeader tcpHeader, ByteBuffer responseBuffer) {
         synchronized (tcb) {
+            KLog.d(TAG, tcb.ipAndPort + " FIN");
             Packet referencePacket = tcb.referencePacket;
             tcb.myAcknowledgementNum = tcpHeader.sequenceNumber + 1;
             tcb.theirAcknowledgementNum = tcpHeader.acknowledgementNumber;

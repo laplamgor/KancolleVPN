@@ -134,15 +134,8 @@ public class LocalVPNService extends VpnService {
 
             int nThreads = 6;
             // TODO: 15-12-15 use weproxy config
-            if (isUseWeProxy) {
-                nThreads++;
-            }
-
             executorService = Executors.newFixedThreadPool(nThreads);
 
-            if (isUseWeProxy) {
-                executorService.submit(new WebEyeProxyManager(this));
-            }
             executorService.submit(new UDPInput(networkToDeviceQueue, udpSelector));
             executorService.submit(new UDPOutput(deviceToNetworkUDPQueue, udpSelector, this));
             executorService.submit(new TCPInput(networkToDeviceQueue, tcpSelector));
@@ -168,7 +161,11 @@ public class LocalVPNService extends VpnService {
 
             Builder builder = new Builder();
             builder.addAddress(VPN_ADDRESS, 32);
-
+            builder.addDnsServer("8.8.8.8");
+            //builder.addRoute("0.0.0.0",0);
+            builder.addRoute("203.0.0.0",8);
+            builder.addRoute("202.0.0.0",8);
+/*
             for (int i = 1; i < 8; i++) {
                 builder.addRoute(i + ".0.0.0", 8);
                 i += 1;
@@ -182,54 +179,17 @@ public class LocalVPNService extends VpnService {
                 builder.addRoute(i + ".0.0.0", 8);
                 i += 1;
             }
-      /*
-            builder.addRoute(VPN_ROUTE, 0);
-
-            builder.addRoute("1.0.0.0", 8);
-            builder.addRoute("2.0.0.0", 7);
-            builder.addRoute("4.0.0.0", 6);
-            builder.addRoute("8.0.0.0", 7);
-            builder.addRoute("11.0.0.0", 8);
-            builder.addRoute("12.0.0.0", 6);
-            builder.addRoute("16.0.0.0", 4);
-            builder.addRoute("32.0.0.0", 3);
-            builder.addRoute("64.0.0.0", 2);
-            builder.addRoute("139.0.0.0", 8);
-            builder.addRoute("140.0.0.0", 6);
-            builder.addRoute("144.0.0.0", 4);
-            builder.addRoute("160.0.0.0", 5);
-            builder.addRoute("168.0.0.0", 6);
-            builder.addRoute("172.0.0.0", 12);
-            builder.addRoute("172.32.0.0", 11);
-            builder.addRoute("172.64.0.0", 10);
-            builder.addRoute("172.128.0.0", 9);
-            builder.addRoute("173.0.0.0", 8);
-            builder.addRoute("174.0.0.0", 7);
-            builder.addRoute("176.0.0.0", 4);
-            builder.addRoute("192.0.0.0", 9);
-            builder.addRoute("192.128.0.0", 11);
-            builder.addRoute("192.160.0.0", 13);
-            builder.addRoute("192.169.0.0", 16);
-            builder.addRoute("192.170.0.0", 15);
-            builder.addRoute("192.172.0.0", 14);
-            builder.addRoute("192.176.0.0", 12);
-            builder.addRoute("192.192.0.0", 10);
-            builder.addRoute("193.0.0.0", 8);
-            for (int i = 194; i < 224; i++) {
-                builder.addRoute(i + ".0.0.0", 8);
-                i += 1;
-            }
 */
-            //builder.addDnsServer("8.8.8.8");
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 KLog.i(TAG, "allowFamily AF_INET");
                 builder.allowFamily(OsConstants.AF_INET);
             }
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    String selfPackage = getPackageName();
-                    KLog.d("filter package: " + selfPackage);
-                    builder.addDisallowedApplication(selfPackage);
+                    builder.addAllowedApplication("com.dmm.dmmlabo.kancolle");
+                    //String selfPackage = getPackageName();
+                    //KLog.d("filter package: " + selfPackage);
+                    //builder.addDisallowedApplication(selfPackage);
                 }
             } catch (PackageManager.NameNotFoundException e) {
                 KLog.e(TAG, e.toString());
@@ -342,25 +302,6 @@ public class LocalVPNService extends VpnService {
                     } else {
                         dataSent = false;
                     }
-/*
-                    try {
-                        bufferFromNetwork = networkToDeviceQueue.poll();
-                        if (bufferFromNetwork != null) {
-                            bufferFromNetwork.flip();
-                            //KLog.i(TAG, "networkToDeviceQueue");
-
-                            while (bufferFromNetwork.hasRemaining()) {
-                                vpnOutput.write(bufferFromNetwork);
-                            }
-                            dataReceived = true;
-                            ByteBufferPool.release(bufferFromNetwork);
-                        } else {
-                            dataReceived = false;
-                        }
-                    } catch (IOException e) {
-                        Log.e(TAG, e.toString(), e);
-                    }
-*/
                     // TODO: Sleep-looping is not very battery-friendly, consider blocking instead
                     // Confirm if throughput with ConcurrentQueue is really higher compared to BlockingQueue
                     if (!dataSent) {
