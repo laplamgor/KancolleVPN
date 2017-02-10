@@ -18,13 +18,11 @@ package xyz.hexene.localvpn;
 
 import java.util.LinkedHashMap;
 
-public class LRUCache<K, V> extends LinkedHashMap<K, V>
-{
+class LRUCache<K, V> extends LinkedHashMap<K, V> {
     private int maxSize;
     private CleanupCallback callback;
 
-    public LRUCache(int maxSize, CleanupCallback callback)
-    {
+    public LRUCache(int maxSize, CleanupCallback callback) {
         super(maxSize + 1, 1, true);
 
         this.maxSize = maxSize;
@@ -32,18 +30,20 @@ public class LRUCache<K, V> extends LinkedHashMap<K, V>
     }
 
     @Override
-    protected boolean removeEldestEntry(Entry<K, V> eldest)
-    {
-        if (size() > maxSize)
-        {
+    protected boolean removeEldestEntry(Entry<K, V> eldest) {
+        if (callback.canCleanup(eldest)) {
+            //KLog.i("removeEldestEntry = " + eldest.getKey());
+
             callback.cleanup(eldest);
             return true;
         }
+
         return false;
     }
 
-    public static interface CleanupCallback<K, V>
-    {
-        public void cleanup(Entry<K, V> eldest);
+    public interface CleanupCallback<K, V> {
+        void cleanup(Entry<K, V> eldest);
+
+        boolean canCleanup(Entry<K, V> eldest);
     }
 }

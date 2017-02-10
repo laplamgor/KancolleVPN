@@ -18,6 +18,8 @@ package xyz.hexene.localvpn;
 
 import android.util.Log;
 
+import com.socks.library.KLog;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
@@ -29,143 +31,166 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 import xyz.hexene.localvpn.TCB.TCBStatus;
 
-public class TCPInput implements Runnable
-{
+class TCPInput implements Runnable {
     private static final String TAG = TCPInput.class.getSimpleName();
     private static final int HEADER_SIZE = Packet.IP4_HEADER_SIZE + Packet.TCP_HEADER_SIZE;
 
     private ConcurrentLinkedQueue<ByteBuffer> outputQueue;
     private Selector selector;
 
-    public TCPInput(ConcurrentLinkedQueue<ByteBuffer> outputQueue, Selector selector)
-    {
+    public TCPInput(ConcurrentLinkedQueue<ByteBuffer> outputQueue, Selector selector) {
         this.outputQueue = outputQueue;
         this.selector = selector;
     }
 
     @Override
-    public void run()
-    {
-        try
-        {
-            Log.d(TAG, "Started");
-            while (!Thread.interrupted())
-            {
-                int readyChannels = selector.select();
+    public void run() {
+        KLog.i(TAG, "Started");
 
+        try {
+            while (!Thread.interrupted()) {
+                int readyChannels = selector.select();
                 if (readyChannels == 0) {
                     Thread.sleep(10);
                     continue;
                 }
+                //KLog.d(TAG, "readyChannels = " + readyChannels);
 
                 Set<SelectionKey> keys = selector.selectedKeys();
                 Iterator<SelectionKey> keyIterator = keys.iterator();
 
-                while (keyIterator.hasNext() && !Thread.interrupted())
-                {
+                while (keyIterator.hasNext() && !Thread.interrupted()) {
                     SelectionKey key = keyIterator.next();
-                    if (key.isValid())
-                    {
+                    if (key.isValid()) {
                         if (key.isConnectable())
                             processConnect(key, keyIterator);
                         else if (key.isReadable())
                             processInput(key, keyIterator);
+                        else
+                            KLog.w(TAG, "unknow key type!!!");
                     }
                 }
             }
-        }
-        catch (InterruptedException e)
-        {
-            Log.i(TAG, "Stopping");
-        }
-        catch (IOException e)
-        {
-            Log.w(TAG, e.toString(), e);
+        } catch (InterruptedException e) {
+            KLog.w(TAG, "Stopping!!!");
+        } catch (Exception e) {
+            Log.e(TAG, e.toString(), e);
+        } finally {
+            KLog.i("stopped run");
         }
     }
 
-    private void processConnect(SelectionKey key, Iterator<SelectionKey> keyIterator)
-    {
+    private void processConnect(SelectionKey key, Iterator<SelectionKey> keyIterator) {
         TCB tcb = (TCB) key.attachment();
-        Packet referencePacket = tcb.referencePacket;
-        try
-        {
-            if (tcb.channel.finishConnect())
-            {
-                keyIterator.remove();
-                tcb.status = TCBStatus.SYN_RECEIVED;
+        synchronized (tcb) {
 
-                // TODO: Set MSS for receiving larger packets from the device
+            Packet referencePacket = tcb.referencePacket;
+            try {
+                if (tcb.channel.finishConnect()) {
+
+                    //zhangjie add 2015.12.11
+                    tcb.refreshDataEXTime();
+
+                    keyIterator.remove();
+                    tcb.status = TCBStatus.SYN_RECEIVED;
+
+                    // TODO: Set MSS for receiving larger packets from the device
+                    ByteBuffer responseBuffer = ByteBufferPool.acquire();
+                    referencePacket.updateTCPBuffer(responseBuffer, (byte) (Packet.TCPHeader.SYN | Packet.TCPHeader.ACK),
+                            tcb.mySequenceNum, tcb.myAcknowledgementNum, 0);
+
+                    KLog.d(TAG, tcb.ipAndPort + " TCP netToDevice SYN|ACK");
+
+                    outputQueue.offer(responseBuffer);
+
+                    tcb.mySequenceNum++; // SYN counts as a byte
+                    key.interestOps(SelectionKey.OP_READ);
+                } else {
+                    KLog.w(TAG, tcb.ipAndPort + " not finishConnect!!!");
+                }
+            } catch (IOException e) {
+                KLog.e(TAG, tcb.ipAndPort + " Connection error: " + e.toString());
                 ByteBuffer responseBuffer = ByteBufferPool.acquire();
-                referencePacket.updateTCPBuffer(responseBuffer, (byte) (Packet.TCPHeader.SYN | Packet.TCPHeader.ACK),
-                        tcb.mySequenceNum, tcb.myAcknowledgementNum, 0);
-                outputQueue.offer(responseBuffer);
+                referencePacket.updateTCPBuffer(responseBuffer, (byte) Packet.TCPHeader.RST, 0, tcb.myAcknowledgementNum, 0);
 
-                tcb.mySequenceNum++; // SYN counts as a byte
-                key.interestOps(SelectionKey.OP_READ);
+                KLog.w(TAG, tcb.ipAndPort + " TCP netToDevice RST");
+
+                outputQueue.offer(responseBuffer);
+                TCB.closeTCB(tcb);//maybe change zhangjie 2015.12.8
             }
         }
-        catch (IOException e)
-        {
-            Log.e(TAG, "Connection error: " + tcb.ipAndPort, e);
-            ByteBuffer responseBuffer = ByteBufferPool.acquire();
-            referencePacket.updateTCPBuffer(responseBuffer, (byte) Packet.TCPHeader.RST, 0, tcb.myAcknowledgementNum, 0);
-            outputQueue.offer(responseBuffer);
-            TCB.closeTCB(tcb);
-        }
     }
 
-    private void processInput(SelectionKey key, Iterator<SelectionKey> keyIterator)
-    {
+    private void processInput(SelectionKey key, Iterator<SelectionKey> keyIterator) {
         keyIterator.remove();
+
         ByteBuffer receiveBuffer = ByteBufferPool.acquire();
         // Leave space for the header
         receiveBuffer.position(HEADER_SIZE);
 
         TCB tcb = (TCB) key.attachment();
-        synchronized (tcb)
-        {
+        synchronized (tcb) {
+            //KLog.d(TAG, tcb.ipAndPort + " st = " + tcb.status);
+
+            //zhangjie add 2015.12.11
+            tcb.refreshDataEXTime();
+
             Packet referencePacket = tcb.referencePacket;
             SocketChannel inputChannel = (SocketChannel) key.channel();
             int readBytes;
-            try
-            {
+            try {
                 readBytes = inputChannel.read(receiveBuffer);
-            }
-            catch (IOException e)
-            {
-                Log.e(TAG, "Network read error: " + tcb.ipAndPort, e);
-                referencePacket.updateTCPBuffer(receiveBuffer, (byte) Packet.TCPHeader.RST, 0, tcb.myAcknowledgementNum, 0);
-                outputQueue.offer(receiveBuffer);
+            } catch (IOException e) {
+                KLog.e(TAG, tcb.ipAndPort + " Network read error: " + e.toString());
+
+                if (tcb.status == TCBStatus.CLOSE_WAIT || tcb.status == TCBStatus.LAST_ACK) {
+                    KLog.w(TAG, tcb.ipAndPort + " closeTCB st = " + tcb.status);
+                    ByteBufferPool.release(receiveBuffer);
+                } else {
+                    referencePacket.updateTCPBuffer(receiveBuffer, (byte) Packet.TCPHeader.RST, 0, tcb.myAcknowledgementNum, 0);
+                    KLog.w(TAG, tcb.ipAndPort + " TCP netToDevice RST");
+                    outputQueue.offer(receiveBuffer);
+                }
+
                 TCB.closeTCB(tcb);
                 return;
             }
 
-            if (readBytes == -1)
-            {
+            if (readBytes == -1) {
                 // End of stream, stop waiting until we push more data
                 key.interestOps(0);
                 tcb.waitingForNetworkData = false;
 
-                if (tcb.status != TCBStatus.CLOSE_WAIT)
-                {
-                    ByteBufferPool.release(receiveBuffer);
-                    return;
+                if (tcb.status != TCBStatus.CLOSE_WAIT) {
+                    if ((tcb.readDataTime > 0) && (System.currentTimeMillis() - tcb.readDataTime > 30 * 1000)) {
+                        KLog.d(TAG, tcb.ipAndPort + " st = " + tcb.status + " readDataTime > 30*1000");
+                        TCB.closeTCB(tcb);
+                        return;
+                    } else {
+                        KLog.d(TAG, tcb.ipAndPort + " st = " + tcb.status + " release receiveBuffer");
+                        ByteBufferPool.release(receiveBuffer);
+                        return;
+                    }
                 }
 
                 tcb.status = TCBStatus.LAST_ACK;
                 referencePacket.updateTCPBuffer(receiveBuffer, (byte) Packet.TCPHeader.FIN, tcb.mySequenceNum, tcb.myAcknowledgementNum, 0);
                 tcb.mySequenceNum++; // FIN counts as a byte
-            }
-            else
-            {
+                KLog.d(TAG, tcb.ipAndPort + " TCP netToDevice FIN");
+            } else {
+                tcb.readDataTime = System.currentTimeMillis();
+                tcb.readlen += readBytes;
+
                 // XXX: We should ideally be splitting segments by MTU/MSS, but this seems to work without
                 referencePacket.updateTCPBuffer(receiveBuffer, (byte) (Packet.TCPHeader.PSH | Packet.TCPHeader.ACK),
                         tcb.mySequenceNum, tcb.myAcknowledgementNum, readBytes);
                 tcb.mySequenceNum += readBytes; // Next sequence number
                 receiveBuffer.position(HEADER_SIZE + readBytes);
+
+                KLog.d(TAG, tcb.ipAndPort + " TCP netToDevice PSH|ACK readBytes = " + readBytes);
             }
         }
+
         outputQueue.offer(receiveBuffer);
     }
 }

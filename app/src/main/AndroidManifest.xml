@@ -25,8 +25,20 @@
             <intent-filter>
                 <action android:name="android.net.VpnService"/>
             </intent-filter>
+
         </service>
+
+        <service
+            android:name="com.webeye.android.weproxy.WeService"
+            android:exported="false"
+            android:process=":proxy"/>
+
     </application>
     <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" />
 
 </manifest>

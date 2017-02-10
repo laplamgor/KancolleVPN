@@ -19,16 +19,16 @@ package xyz.hexene.localvpn;
 import java.nio.ByteBuffer;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-public class ByteBufferPool
+class ByteBufferPool
 {
-    private static final int BUFFER_SIZE = 16384; // XXX: Is this ideal?
-    private static ConcurrentLinkedQueue<ByteBuffer> pool = new ConcurrentLinkedQueue<>();
+    private static final int BUFFER_SIZE = 65535; // XXX: Is this ideal?
+    private static final ConcurrentLinkedQueue<ByteBuffer> pool = new ConcurrentLinkedQueue<>();
 
     public static ByteBuffer acquire()
     {
         ByteBuffer buffer = pool.poll();
         if (buffer == null)
-            buffer = ByteBuffer.allocateDirect(BUFFER_SIZE); // Using DirectBuffer for zero-copy
+            buffer = ByteBuffer.allocateDirect(BUFFER_SIZE+20); // Using DirectBuffer for zero-copy
         return buffer;
     }
 
