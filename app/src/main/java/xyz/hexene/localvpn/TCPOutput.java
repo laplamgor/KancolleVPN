@@ -27,8 +27,10 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
+import java.util.Arrays;
 import java.util.Random;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import xyz.hexene.localvpn.Packet.TCPHeader;
 import xyz.hexene.localvpn.TCB.TCBStatus;
@@ -41,14 +43,16 @@ class TCPOutput implements Runnable {
     private LocalVPNService vpnService;
     private ConcurrentLinkedQueue<Packet> inputQueue;
     private ConcurrentLinkedQueue<ByteBuffer> outputQueue;
+    private LinkedBlockingQueue<byte[]> APIqueue;
     private Selector selector;
 
     private Random random = new Random();
 
     public TCPOutput(ConcurrentLinkedQueue<Packet> inputQueue, ConcurrentLinkedQueue<ByteBuffer> outputQueue,
-                     Selector selector, LocalVPNService vpnService) {
+                     LinkedBlockingQueue<byte[]> APIqueue,Selector selector, LocalVPNService vpnService) {
         this.inputQueue = inputQueue;
         this.outputQueue = outputQueue;
+        this.APIqueue = APIqueue;
         this.selector = selector;
         this.vpnService = vpnService;
     }
@@ -130,7 +134,7 @@ class TCPOutput implements Runnable {
     private void initializeConnection(String ipAndPort, InetAddress destinationAddress, int destinationPort,
                                       Packet currentPacket, TCPHeader tcpHeader, ByteBuffer responseBuffer)
             throws IOException {
-        KLog.i("initializeConnection "+tcpHeader.isSYN()+tcpHeader.isRST()+tcpHeader.isFIN()+tcpHeader.isACK());
+        //KLog.i("initializeConnection "+tcpHeader.isSYN()+tcpHeader.isRST()+tcpHeader.isFIN()+tcpHeader.isACK());
         currentPacket.swapSourceAndDestination();
         if (tcpHeader.isSYN()) {
             SocketChannel outputChannel = SocketChannel.open();
@@ -144,12 +148,15 @@ class TCPOutput implements Runnable {
             try {
                 outputChannel.socket().setReceiveBufferSize(65535);
                 outputChannel.socket().setSendBufferSize(65535);
+                /*
                 if (destinationPort == 80 && vpnService.getWeProxyAvailability()) {
                     KLog.d(TAG, ipAndPort + " use proxy " + vpnService.getWeProxyHost() + ":" + vpnService.getWeProxyPort());
                     outputChannel.connect(new InetSocketAddress(vpnService.getWeProxyHost(), vpnService.getWeProxyPort()));
                 } else {
                     outputChannel.connect(new InetSocketAddress(destinationAddress, destinationPort));
                 }
+                */
+                outputChannel.connect(new InetSocketAddress(destinationAddress, destinationPort));
 
                 tcb.status = TCBStatus.SYN_SENT;
                 selector.wakeup();
@@ -227,7 +234,7 @@ class TCPOutput implements Runnable {
         synchronized (tcb) {
             SocketChannel outputChannel = tcb.channel;
 
-            KLog.d(TAG, tcb.ipAndPort + " st = " + tcb.status + "; waitData = " + tcb.waitingForNetworkData + "; payload = " + payloadSize);
+            //KLog.d(TAG, tcb.ipAndPort + " st = " + tcb.status + "; waitData = " + tcb.waitingForNetworkData + "; payload = " + payloadSize);
 
             switch (tcb.status) {
                 case SYN_SENT:{
@@ -247,7 +254,6 @@ class TCPOutput implements Runnable {
                 case LAST_ACK: {
                     //closeCleanly(tcb, responseBuffer);
                     TCB.closeTCB(tcb);
-                    //KLog.d(TAG, tcb.ipAndPort + " ACK closeTCB st = " + tcb.status + " payloadSize = " + payloadSize);
                 }
                 return;
 
@@ -276,6 +282,28 @@ class TCPOutput implements Runnable {
             try {
                 while (payloadBuffer.hasRemaining()) {
                     outputChannel.write(payloadBuffer);
+
+                    try {
+                        int ret = 0;
+                        if( tcb.kancolleClient.httpPacketStatus == httpPacket.HTTP_NULL) {
+                                String HTTP = new String(Arrays.copyOfRange(payloadBuffer.array(), 44, 48));
+                                if (HTTP.equals("POST") || HTTP.equals("GET ")) {
+                                    KLog.d(TAG, "!!GOT Client Request!! "+payloadSize);
+                                    ret = tcb.kancolleClient.processClient(Arrays.copyOfRange(payloadBuffer.array(),44,payloadSize+44));
+                                }
+                        }
+                        else {
+                            ret = tcb.kancolleClient.processClient(Arrays.copyOfRange(payloadBuffer.array(),44,payloadSize+44));
+                        }
+                        if(ret == 1){
+                            APIqueue.offer(tcb.kancolleClient.httpPacketBuffer);
+                            tcb.kancolleClient.clear();
+                        }
+                    }
+                    catch (IllegalArgumentException e){
+
+                    }
+                    //KLog.i(TAG,"HTTP request: " + new String(Arrays.copyOfRange(payloadBuffer.array(),44,payloadSize)));
                 }
             } catch (Exception e) {
                 KLog.e(TAG, tcb.ipAndPort + " Network write error: " + e.toString());

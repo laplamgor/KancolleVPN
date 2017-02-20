@@ -21,13 +21,16 @@ import android.util.Log;
 import com.socks.library.KLog;
 
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import xyz.hexene.localvpn.TCB.TCBStatus;
 
@@ -36,10 +39,12 @@ class TCPInput implements Runnable {
     private static final int HEADER_SIZE = Packet.IP4_HEADER_SIZE + Packet.TCP_HEADER_SIZE;
 
     private ConcurrentLinkedQueue<ByteBuffer> outputQueue;
+    private LinkedBlockingQueue<byte[]> APIqueue;
     private Selector selector;
 
-    public TCPInput(ConcurrentLinkedQueue<ByteBuffer> outputQueue, Selector selector) {
+    public TCPInput(ConcurrentLinkedQueue<ByteBuffer> outputQueue, LinkedBlockingQueue<byte[]> APIqueue, Selector selector) {
         this.outputQueue = outputQueue;
+        this.APIqueue = APIqueue;
         this.selector = selector;
     }
 
@@ -173,7 +178,7 @@ class TCPInput implements Runnable {
                         tcb.status = TCBStatus.LAST_ACK;
                         referencePacket.updateTCPBuffer(receiveBuffer, (byte)( Packet.TCPHeader.FIN | Packet.TCPHeader.ACK), tcb.mySequenceNum, tcb.myAcknowledgementNum, 0);
                         tcb.mySequenceNum++; // FIN counts as a byte
-                        KLog.d(TAG, tcb.ipAndPort + " TCP netToDevice FIN");
+                        KLog.d(TAG, tcb.ipAndPort + " TCP netToDevice FIN|ACK");
                         outputQueue.offer(receiveBuffer);
                         return;
                     }
@@ -187,12 +192,28 @@ class TCPInput implements Runnable {
                 tcb.readDataTime = System.currentTimeMillis();
                 tcb.readlen += readBytes;
 
+                int ret = 0;
+                if( tcb.kancolleServer.httpPacketStatus == httpPacket.HTTP_NULL) {
+                    if (readBytes > 48) {
+                        String HTTP = new String(Arrays.copyOfRange(receiveBuffer.array(), 44, 48));
+                        if (HTTP.equals("HTTP")) {
+                            ret = tcb.kancolleServer.processServer(Arrays.copyOfRange(receiveBuffer.array(),44,readBytes+44));
+                        }
+                    }
+                }
+                else {
+                    ret = tcb.kancolleServer.processServer(Arrays.copyOfRange(receiveBuffer.array(),44,readBytes+44));
+                }
+                if(ret == 1){
+                    APIqueue.offer(tcb.kancolleServer.httpPacketBuffer);
+                    tcb.kancolleServer.clear();
+                }
                 // XXX: We should ideally be splitting segments by MTU/MSS, but this seems to work without
                 referencePacket.updateTCPBuffer(receiveBuffer, (byte) (Packet.TCPHeader.PSH | Packet.TCPHeader.ACK),
                         tcb.mySequenceNum, tcb.myAcknowledgementNum, readBytes);
                 tcb.mySequenceNum += readBytes; // Next sequence number
                 receiveBuffer.position(HEADER_SIZE + readBytes);
-                KLog.d(TAG, tcb.ipAndPort + " TCP netToDevice PSH|ACK readBytes = " + readBytes);
+                //KLog.d(TAG, tcb.ipAndPort + " TCP netToDevice PSH|ACK readBytes = " + readBytes);
             }
         }
 

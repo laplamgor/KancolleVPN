@@ -119,7 +119,6 @@ public class LocalVPN extends ActionBarActivity {
             localServiceIntent = new Intent(this, LocalVPNService.class);
             startService(localServiceIntent);
             enableButton(false);
-            enableProxyButton(LocalVPNService.getWeProxyAvailability());
         }
     }
 
@@ -130,7 +129,6 @@ public class LocalVPN extends ActionBarActivity {
         super.onResume();
 
         enableButton(!waitingForVPNStart && !LocalVPNService.isRunning());
-        enableProxyButton(!waitingForVPNStart && LocalVPNService.getWeProxyAvailability());
     }
 
     private void enableButton(boolean enable) {
@@ -141,21 +139,6 @@ public class LocalVPN extends ActionBarActivity {
         } else {
             vpnButton.setText(R.string.stop_vpn);
         }
-    }
-
-    private void enableProxyButton(boolean enable) {
-        final Button vpnButton = (Button) findViewById(R.id.proxy);
-        vpnButton.setEnabled(true);
-        if (!enable) {
-            vpnButton.setText(R.string.start_proxy);
-        } else {
-            vpnButton.setText(R.string.stop_proxy);
-        }
-    }
-
-    public void SetProxy(View v) {
-        LocalVPNService.setWeProxyAvailability(!LocalVPNService.getWeProxyAvailability());
-        enableProxyButton(LocalVPNService.getWeProxyAvailability());
     }
 
     @SuppressLint("NewApi")

@@ -28,4 +28,5 @@ dependencies {
     compile fileTree(dir: 'libs', include: ['*.jar'])
     compile 'com.android.support:appcompat-v7:21.0.3'
     compile 'com.github.zhaokaiqiang.klog:library:1.1.0'
+    compile 'com.google.code.gson:gson:2.8.0'
 }

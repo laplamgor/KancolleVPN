@@ -39,6 +39,9 @@ public class TCB {
     public int curNum;
     public Packet referencePacket;
 
+    public httpPacket kancolleClient = new httpPacket();
+    public httpPacket kancolleServer = new httpPacket();
+
     public SocketChannel channel;
     public boolean waitingForNetworkData;
     public SelectionKey selectionKey;
