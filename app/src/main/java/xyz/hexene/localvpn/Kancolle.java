@@ -2,6 +2,8 @@ package xyz.hexene.localvpn;
 
 import android.os.Environment;
 import android.util.Pair;
+import android.app.*;
+import android.support.v4.app.NotificationCompat;
 
 import com.google.gson.Gson;
 import com.socks.library.KLog;
@@ -34,7 +36,9 @@ public class Kancolle implements Runnable {
         api_null,
         start2,
         ship_deck,
-        port
+        port,
+
+        text_returnTime
     }
 
     private API currentAPI;
@@ -73,6 +77,9 @@ public class Kancolle implements Runnable {
                     case port:
                         action_port();
                         break;
+                    case text_returnTime:
+                        action_completeTime(request);
+                        break;
                     default:
                         break;
                 }
@@ -93,13 +100,86 @@ public class Kancolle implements Runnable {
                 return true;
             }
         }
-        KLog.i("Kancolle thread: Unknown API");
+
+        String requestString = new String(request);
+        if (requestString.contains("api_complatetime")) {
+            currentAPI = API.text_returnTime;
+            return true;
+        }
+
+
+
+        KLog.i("Kancolle thread: Unknown API: " + requestString);
+
+
         return false;
     }
 
     boolean parseResponse(byte[] raw_response){
         response = new String(raw_response);
         return true;
+    }
+
+    void action_completeTime(byte[] request){
+        String requestString = new String(request);
+        int start = requestString.indexOf("\"api_complatetime\":") + "\"api_complatetime\":".length();
+        int end = requestString.indexOf(",\"", start);
+
+        long endTime = Long.parseLong(requestString.substring(start, end));
+        long currentTime = System.currentTimeMillis();
+        int seconds = (int) (endTime - currentTime)/1000;
+        countDownNotification(endTime);
+        KLog.i("Kancolle thread: completeTime: " + seconds );
+
+
+        // Get the complete time
+    }
+
+    int uid = 1;
+
+    void countDownNotification(final long endTime){
+
+        final int id = uid++;
+        final NotificationManager mNotifyManager =
+                (NotificationManager) MyApp.getContext().getSystemService(MyApp.getContext().NOTIFICATION_SERVICE);
+        final NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(MyApp.getInstance());
+        long secondLeft = (int) (endTime - System.currentTimeMillis()) / 1000;
+        mBuilder.setContentTitle("遠征")
+                .setContentText(String.format("%02d:%02d:%02d",secondLeft / 3600 ,  (secondLeft % 3600) / 60 , secondLeft % 60))
+                .setSmallIcon(R.drawable.ic_launcher);
+// Start a lengthy operation in a background thread
+        new Thread(
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        long startTime = System.currentTimeMillis();
+                        // Do the "lengthy" operation 20 times
+                        while (System.currentTimeMillis() <= endTime) {
+                            long secondLeft = (int) (endTime - System.currentTimeMillis()) / 1000;
+                            mBuilder.setContentText(String.format("%02d:%02d:%02d",secondLeft / 3600 , (secondLeft % 3600) / 60 , secondLeft % 60))
+                                    .setProgress((int) (endTime - startTime) / 1000, (int) (System.currentTimeMillis() - startTime) / 1000, false);
+                            // Displays the progress bar for the first time.
+                            mNotifyManager.notify(id, mBuilder.build());
+
+                            // Sleeps the thread, simulating an operation
+                            // that takes time
+                            try {
+                                // Sleep for 10 seconds
+                                Thread.sleep(1*1000);
+                            } catch (InterruptedException e) {
+                                //Log.d(TAG, "sleep failure");
+                            }
+                        }
+
+                        // When the loop is finished, updates the notification
+                        mBuilder.setContentText("遠征完成")
+                                // Removes the progress bar
+                                .setProgress(0,0,false);
+                        mNotifyManager.notify(id, mBuilder.build());
+                    }
+                }
+        // Starts the thread by calling the run() method in its Runnable
+        ).start();
     }
 
     void action_start2(){

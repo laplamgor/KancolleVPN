@@ -78,6 +78,7 @@ public class LocalVPNService extends VpnService {
     private ExecutorService executorService;
     private Selector udpSelector;
     private Selector tcpSelector;
+    private Context context;
 
     public static boolean isRunning() {
         return isRunning;
@@ -151,8 +152,9 @@ public class LocalVPNService extends VpnService {
             builder.addAddress(VPN_ADDRESS, 32);
             builder.addDnsServer("8.8.8.8");
             //builder.addRoute("0.0.0.0",0);
-            builder.addRoute("203.0.0.0",8);
-            builder.addRoute("202.0.0.0",8);
+//            builder.addRoute("203.0.0.0",8);
+//            builder.addRoute("202.0.0.0",8);
+            builder.addRoute("125.6.189.7", 32);
 /*
             for (int i = 1; i < 8; i++) {
                 builder.addRoute(i + ".0.0.0", 8);
