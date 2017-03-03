@@ -1,9 +1,15 @@
 package xyz.hexene.localvpn;
 
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
 import android.os.Environment;
 import android.util.Pair;
 import android.app.*;
+
 import android.support.v4.app.NotificationCompat;
+import android.widget.Toast;
 
 import com.google.gson.Gson;
 import com.socks.library.KLog;
@@ -132,10 +138,21 @@ public class Kancolle implements Runnable {
         KLog.i("Kancolle thread: completeTime: " + seconds );
 
 
-        // Get the complete time
     }
 
     int uid = 1;
+
+
+
+
+
+
+
+
+
+
+
+
 
     void countDownNotification(final long endTime){
 
@@ -147,7 +164,24 @@ public class Kancolle implements Runnable {
         mBuilder.setContentTitle("遠征")
                 .setContentText(String.format("%02d:%02d:%02d",secondLeft / 3600 ,  (secondLeft % 3600) / 60 , secondLeft % 60))
                 .setSmallIcon(R.drawable.ic_launcher);
-// Start a lengthy operation in a background thread
+
+        // Get the kancolle app packet
+        Context context = MyApp.getContext();
+        PackageManager pm = context.getPackageManager();
+        Intent LaunchIntent = null;
+        String kancollePackageName = "com.dmm.dmmlabo.kancolle";
+        try {
+            if (pm != null) {
+                ApplicationInfo app = context.getPackageManager().getApplicationInfo(kancollePackageName, 0);
+                LaunchIntent = pm.getLaunchIntentForPackage(kancollePackageName);
+            }
+        } catch (PackageManager.NameNotFoundException e) {
+            e.printStackTrace();
+        }
+        final PendingIntent pIntent = PendingIntent.getActivity(context, 0, LaunchIntent, PendingIntent.FLAG_UPDATE_CURRENT);
+
+
+        // Start a lengthy operation in a background thread
         new Thread(
                 new Runnable() {
                     @Override
@@ -157,28 +191,32 @@ public class Kancolle implements Runnable {
                         while (System.currentTimeMillis() <= endTime) {
                             long secondLeft = (int) (endTime - System.currentTimeMillis()) / 1000;
                             mBuilder.setContentText(String.format("%02d:%02d:%02d",secondLeft / 3600 , (secondLeft % 3600) / 60 , secondLeft % 60))
-                                    .setProgress((int) (endTime - startTime) / 1000, (int) (System.currentTimeMillis() - startTime) / 1000, false);
+                                    .setProgress((int) (endTime - startTime) / 1000, (int) (System.currentTimeMillis() - startTime) / 1000, false)
+                                    .setOngoing(true);
                             // Displays the progress bar for the first time.
                             mNotifyManager.notify(id, mBuilder.build());
 
-                            // Sleeps the thread, simulating an operation
-                            // that takes time
+                            // Sleeps the thread, for each second
                             try {
-                                // Sleep for 10 seconds
                                 Thread.sleep(1*1000);
                             } catch (InterruptedException e) {
-                                //Log.d(TAG, "sleep failure");
+
                             }
                         }
 
                         // When the loop is finished, updates the notification
                         mBuilder.setContentText("遠征完成")
                                 // Removes the progress bar
-                                .setProgress(0,0,false);
+                                .setProgress(0,0,false)
+                                // Vibrate twice
+                                .setVibrate(new long[]{ 0, 100, 200, 100})
+                                // Click the notification to launch Kancolle
+                               .setContentIntent(pIntent)
+                               .setOngoing(false).setAutoCancel(true);
+
                         mNotifyManager.notify(id, mBuilder.build());
                     }
                 }
-        // Starts the thread by calling the run() method in its Runnable
         ).start();
     }
 
@@ -196,6 +234,9 @@ public class Kancolle implements Runnable {
     }
 
     void action_port(){
+
+        // For debug only
+        // countDownNotification(System.currentTimeMillis() + 10000);
     }
 
     void load_start2(){
