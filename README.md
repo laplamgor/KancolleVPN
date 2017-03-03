@@ -1,4 +1,4 @@
-# LocalVPN
+# Kancolle Android Tool
 A tool for Android Kancolle using VpnService to sniff packets
 
 License: Apache v2.0
